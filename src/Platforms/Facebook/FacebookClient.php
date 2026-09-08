@@ -11,6 +11,7 @@ use Goletter\Adv\Support\RotatesAccessTokens;
 use GuzzleHttp\Exception\RequestException;
 use Psr\Http\Message\ResponseInterface;
 use Throwable;
+use function Goletter\Utils\logging;
 
 class FacebookClient
 {
@@ -24,10 +25,6 @@ class FacebookClient
 
     protected Client $http;
 
-    /** @deprecated 拼写保留以兼容旧调用，语义为 businessId */
-    protected int $busineId;
-
-    protected int $platformId;
     protected string $baseUri;
     protected string $apiVersion;
 
@@ -59,7 +56,7 @@ class FacebookClient
     /**
      * FB 响应头 x-app-usage 的全局回调。
      *
-     * @var null|callable(array $usage, string $accessToken, int $busineId, int $platformId): void
+     * @var null|callable(array $usage, string $accessToken): void
      */
     protected static $appUsageHandler = null;
 
@@ -75,13 +72,9 @@ class FacebookClient
      */
     public function __construct(
         string|array $accessToken,
-        int $busineId = 0,
-        int $platformId = 0,
         string $apiVersion = 'v24.0'
     ) {
         $this->bootstrapAccessTokens($accessToken);
-        $this->busineId = $busineId;
-        $this->platformId = $platformId;
         $this->apiVersion = $apiVersion;
         $this->baseUri = "https://graph.facebook.com/{$apiVersion}";
 
@@ -236,7 +229,7 @@ class FacebookClient
     }
 
     /**
-     * @param null|callable(array $usage, string $accessToken, int $busineId, int $platformId): void $handler
+     * @param null|callable(array $usage, string $accessToken): void $handler
      */
     public static function setAppUsageHandler(?callable $handler): void
     {
@@ -345,7 +338,7 @@ class FacebookClient
 
             $response = $this->http->request($method, $uri, $options);
             $this->lastRequestAt = microtime(true);
-            $this->captureAppUsage($response, $this->accessToken, $this->busineId, $this->platformId);
+            $this->captureAppUsage($response, $this->accessToken);
             $data = json_decode((string) $response->getBody(), true) ?: [];
 
             if (isset($data['error'])) {
@@ -367,17 +360,9 @@ class FacebookClient
             throw $e;
         } catch (RequestException $e) {
             $response = $e->getResponse();
-            if ($response && str_contains($e->getMessage(), 'Calls to this api have exceeded the rate limit')) {
-                $this->safeLog(
-                    ['token' => $this->accessToken, 'headers' => $response->getHeaders()],
-                    'limit-exceeded',
-                    'limit'
-                );
-            }
-
             if ($response) {
                 $this->lastRequestAt = microtime(true);
-                $this->captureAppUsage($response, $this->accessToken, $this->busineId, $this->platformId);
+                $this->captureAppUsage($response, $this->accessToken);
                 $nowBody = json_decode((string) $response->getBody(), true) ?: [];
                 $payload = [
                     ...$nowBody,
@@ -501,9 +486,7 @@ class FacebookClient
 
     protected function captureAppUsage(
         ResponseInterface $response,
-        string $accessToken,
-        int $busineId,
-        int $platformId
+        string $accessToken
     ): void {
         $header = $response->getHeaderLine('x-app-usage');
         if ($header === '') {
@@ -517,7 +500,7 @@ class FacebookClient
         $this->lastAppUsage = $usage;
 
         if (is_callable(self::$appUsageHandler)) {
-            (self::$appUsageHandler)($usage, $accessToken, $busineId, $platformId);
+            (self::$appUsageHandler)($usage, $accessToken);
         }
     }
 

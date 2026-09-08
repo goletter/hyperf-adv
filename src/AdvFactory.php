@@ -29,7 +29,7 @@ use InvalidArgumentException;
  *
  * 静态用法（兼容）：
  *   AdvFactory::make('facebook', $token)
- *   AdvFactory::make(1, $token, ['business_id' => 123])
+ *   AdvFactory::make(0, $token)
  *
  * Hyperf DI：
  *   $factory = $container->get(AdvFactory::class);
@@ -46,9 +46,9 @@ class AdvFactory
 
     /** @var array<int|string, string> */
     protected static array $defaultAliases = [
-        1 => self::FACEBOOK,
-        2 => self::GOOGLE,
-        3 => self::TIKTOK,
+        0 => self::FACEBOOK,
+        1 => self::TIKTOK,
+        3 => self::GOOGLE,
         'fb' => self::FACEBOOK,
         'meta' => self::FACEBOOK,
         'tt' => self::TIKTOK,
@@ -116,8 +116,6 @@ class AdvFactory
     /**
      * @param string|list<string> $accessToken
      * @param array{
-     *     business_id?: int,
-     *     platform_id?: int,
      *     api_version?: string,
      *     base_uri?: string,
      *     developer_token?: string,
@@ -270,8 +268,6 @@ class AdvFactory
     {
         $client = new FacebookClient(
             $accessToken,
-            (int) ($options['business_id'] ?? $options['busine_id'] ?? 0),
-            (int) ($options['platform_id'] ?? 0),
             (string) ($options['api_version'] ?? 'v24.0')
         );
 

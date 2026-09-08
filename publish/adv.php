@@ -2,12 +2,14 @@
 
 declare(strict_types=1);
 
+use function Hyperf\Support\env;
+
 return [
-    // 平台数字别名：AdvFactory::make(1, $token)
+    // 平台数字别名：AdvFactory::make(0, $token)
     'platforms' => [
-        1 => 'facebook',
-        2 => 'google',
-        3 => 'tiktok',
+        0 => 'facebook',
+        1 => 'tiktok',
+        3 => 'google',
     ],
 
     'facebook' => [

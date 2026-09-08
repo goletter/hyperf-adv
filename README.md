@@ -22,7 +22,7 @@ use Goletter\Adv\AdvFactory;
 $adv = AdvFactory::make('facebook', $accessToken);
 // 或多个 token：当前失败则轮询下一个，直到全部试完
 // $adv = AdvFactory::make('facebook', [$token1, $token2, $token3]);
-// 或 AdvFactory::make(2, $token, ['developer_token' => '...']); // 2 = google
+// 或 AdvFactory::make(3, $token, ['developer_token' => '...']); // 3 = google
 
 foreach ($adv->account->iterateAccounts() as $account) {
     // ...
@@ -84,9 +84,7 @@ $adv = AdvFactory::make('custom', $token);
 use Goletter\Adv\AdvFactory;
 use Goletter\Adv\Platforms\Facebook\FacebookClient;
 
-$adv = AdvFactory::make('facebook', [$tokenA, $tokenB, $tokenC], [
-    'business_id' => 123,
-]);
+$adv = AdvFactory::make('facebook', [$tokenA, $tokenB, $tokenC]);
 
 // 也可直接构造 Client
 $client = new FacebookClient([$tokenA, $tokenB]);
@@ -205,7 +203,7 @@ $campaign->updateCampaignStatus(
 );
 ```
 
-业务侧也可通过 `AdvFactory::make(2, $oauthToken)` 或 `AdvFactory::make('google', $oauthToken)` 获取平台 Bundle（含 client / account / business / campaign / report）。
+业务侧也可通过 `AdvFactory::make(3, $oauthToken)` 或 `AdvFactory::make('google', $oauthToken)` 获取平台 Bundle（含 client / account / business / campaign / report）。
 
 环境变量（可选）：
 
@@ -248,7 +246,7 @@ $client->configureRateLimit([
 ]);
 
 // 监听用量（可落库 / 告警）
-FacebookClient::setAppUsageHandler(function (array $usage, string $token, int $busineId, int $platformId) {
+FacebookClient::setAppUsageHandler(function (array $usage, string $token) {
     // $usage: call_count / total_cputime / total_time（0–100）
 });
 
