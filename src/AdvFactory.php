@@ -11,11 +11,13 @@ use Goletter\Adv\Platforms\Facebook\FacebookCampaign;
 use Goletter\Adv\Platforms\Facebook\FacebookClient;
 use Goletter\Adv\Platforms\Facebook\FacebookReport;
 use Goletter\Adv\Platforms\Google\GoogleAccount;
+use Goletter\Adv\Platforms\Google\GoogleAuth;
 use Goletter\Adv\Platforms\Google\GoogleBusiness;
 use Goletter\Adv\Platforms\Google\GoogleCampaign;
 use Goletter\Adv\Platforms\Google\GoogleClient;
 use Goletter\Adv\Platforms\Google\GoogleReport;
 use Goletter\Adv\Platforms\TikTok\TikTokAccount;
+use Goletter\Adv\Platforms\TikTok\TikTokAuth;
 use Goletter\Adv\Platforms\TikTok\TikTokBusiness;
 use Goletter\Adv\Platforms\TikTok\TikTokCampaign;
 use Goletter\Adv\Platforms\TikTok\TikTokClient;
@@ -79,6 +81,27 @@ class AdvFactory
         return new FacebookAuth((string) ($options['api_version'] ?? 'v24.0'));
     }
 
+    /**
+     * TikTok Marketing API OAuth（无需已有 access token）。
+     *
+     * @param array{base_uri?: string, auth_base_uri?: string} $options
+     */
+    public static function tiktokAuth(array $options = []): TikTokAuth
+    {
+        return new TikTokAuth(
+            (string) ($options['base_uri'] ?? 'https://business-api.tiktok.com'),
+            (string) ($options['auth_base_uri'] ?? $options['base_uri'] ?? 'https://business-api.tiktok.com')
+        );
+    }
+
+    /**
+     * Google Ads OAuth2（无需已有 access token）。
+     */
+    public static function googleAuth(): GoogleAuth
+    {
+        return new GoogleAuth();
+    }
+
     public static function normalizePlatform(string|int $platform): string
     {
         if (is_int($platform) || ctype_digit((string) $platform)) {
@@ -113,6 +136,10 @@ class AdvFactory
 
         if (! empty($options['default_headers']) && is_array($options['default_headers'])) {
             $client->setDefaultHeaders($options['default_headers']);
+        }
+
+        if (! empty($options['rate_limit']) && is_array($options['rate_limit'])) {
+            $client->configureRateLimit($options['rate_limit']);
         }
 
         return new PlatformBundle(

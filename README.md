@@ -50,6 +50,47 @@ try {
 
 需要 OAuth2 **Access Token**、**Developer Token**，操作 MCC 下子账户时还需 **Login Customer ID**（经理账户 ID，纯数字）。
 
+#### 应用授权 OAuth (GoogleAuth)
+
+Google Ads OAuth2 分两步（默认 scope：`https://www.googleapis.com/auth/adwords`）：
+
+1. **授权页**：生成 URL，引导用户同意并返回 `code`
+2. **回调**：用 `code` 换 Access Token / Refresh Token（`access_type=offline` + `prompt=consent` 才会返回 refresh_token）
+
+```php
+use Goletter\Adv\AdvFactory;
+use Goletter\Adv\Platforms\Google\GoogleAuth;
+
+$auth = AdvFactory::googleAuth();
+// 或：new GoogleAuth();
+
+// ---------- 1) 生成授权 URL 并跳转 ----------
+$state = bin2hex(random_bytes(16)); // 建议落库，回调时校验
+$url = $auth->getAuthUrl(
+    clientId: 'YOUR_CLIENT_ID',
+    redirectUri: 'https://your.domain/api/google/callback', // 须与 Google Cloud 后台一致
+    state: $state,
+);
+// return $this->response->redirect($url);
+
+// ---------- 2) 回调：code 换 Token ----------
+// Google 回调参数：code、state（失败时可能有 error / error_description）
+$result = $auth->handleCallback(
+    clientId: 'YOUR_CLIENT_ID',
+    clientSecret: 'YOUR_CLIENT_SECRET',
+    redirectUri: 'https://your.domain/api/google/callback', // 须与第 1 步完全一致
+    code: (string) $request->input('code'),
+);
+// $result['access_token']   // 用于 GoogleClient
+// $result['refresh_token']  // 首次授权通常有；请持久化
+// $result['expires_in']
+
+// 刷新 Access Token：
+// $token = $auth->refreshToken($clientId, $clientSecret, $refreshToken);
+```
+
+拿到 `access_token` 后即可调用 Ads API：
+
 ```php
 use Goletter\Adv\Platforms\Google\GoogleClient;
 use Goletter\Adv\Platforms\Google\GoogleAccount;
@@ -105,6 +146,7 @@ $campaign->updateCampaignStatus(
 
 - `GOOGLE_ADS_DEVELOPER_TOKEN`
 - `GOOGLE_ADS_LOGIN_CUSTOMER_ID`
+- `GOOGLE_ADS_CLIENT_ID` / `GOOGLE_ADS_CLIENT_SECRET` / `GOOGLE_ADS_REDIRECT_URI`（OAuth 授权用）
 
 ### 基础 Client
 
@@ -128,6 +170,36 @@ foreach ($client->paginate('/me/adaccounts', ['fields' => 'id,name']) as $accoun
     // 处理每个账户
     echo $account['id'] . PHP_EOL;
 }
+
+// ---------- 频率限制（默认已启用自动重试）----------
+// 撞限（错误码 4/17/32/613 或 message 含 rate limit）时指数退避重试；
+// 也可根据 x-app-usage 主动减速。
+$client->configureRateLimit([
+    'max_retries' => 5,           // 限流后最多再试 5 次
+    'retry_base_delay_ms' => 200, // 退避基数（毫秒），指数增长并带抖动
+    'min_interval_ms' => 50,      // 两次请求最小间隔（毫秒），0=不限制
+    'usage_threshold' => 80,      // x-app-usage 任一指标 >= 80 时主动等待
+    'usage_delay_ms' => 1000,     // 超阈值时额外等待（毫秒）
+]);
+
+// 监听用量（可落库 / 告警）
+FacebookClient::setAppUsageHandler(function (array $usage, string $token, int $busineId, int $platformId) {
+    // $usage: call_count / total_cputime / total_time（0–100）
+});
+
+// Graph Batch：一次 HTTP 提交最多 50 个子请求（自动分片 + 走统一限流）
+$batchResults = $client->batch([
+    ['method' => 'GET', 'relative_url' => 'me?fields=id,name'],
+    [
+        'method' => 'POST',
+        'relative_url' => 'CAMPAIGN_ID',
+        'body' => http_build_query(['status' => 'PAUSED']),
+    ],
+]);
+// 每项：['code' => 200, 'success' => true, 'body' => [...], 'error' => '', 'headers' => []]
+
+// AdvFactory 也可传入 rate_limit：
+// AdvFactory::make('facebook', $token, ['rate_limit' => ['min_interval_ms' => 50]]);
 ```
 
 ### 应用授权 OAuth (FacebookAuth / dialog/oauth)
@@ -250,7 +322,7 @@ $pages = $business->listPages('BUSINESS_ID');
 // 从 Business Manager 移除广告账户
 $result = $business->removeAdAccount('BUSINESS_ID', 'ACCOUNT_ID');
 
-// 批量移除广告账户
+// 批量移除广告账户（内部走 Graph Batch，每批最多 50，自动限流重试）
 $results = $business->batchRemoveAdAccounts('BUSINESS_ID', ['ACCOUNT_ID_1', 'ACCOUNT_ID_2']);
 ```
 
@@ -387,7 +459,7 @@ $campaign->activateCampaign('CAMPAIGN_ID'); // 启用
 $campaign->deleteCampaign('CAMPAIGN_ID'); // 删除
 $campaign->archiveCampaign('CAMPAIGN_ID'); // 归档
 
-// 批量更新状态
+// 批量更新状态（内部走 Graph Batch，每批最多 50，自动限流重试）
 $results = $campaign->batchUpdateStatus(['CAMPAIGN_ID_1', 'CAMPAIGN_ID_2'], 'PAUSED');
 ```
 
@@ -884,6 +956,58 @@ foreach ($account->iterateCampaigns('ACCOUNT_ID') as $campaign) {
 
 ## TikTok 使用示例
 
+### 应用授权 OAuth (TikTokAuth / portal/auth)
+
+TikTok Marketing API 应用授权分两步：
+
+1. **portal/auth**：生成授权页 URL，引导用户授权广告账户
+2. **回调**：用返回的 `auth_code` 换 Access Token / Refresh Token
+
+```php
+use Goletter\Adv\AdvFactory;
+use Goletter\Adv\Platforms\TikTok\TikTokAuth;
+
+// 推荐：工厂创建（OAuth 阶段无需已有 access token）
+$auth = AdvFactory::tiktokAuth();
+// 或：new TikTokAuth('https://business-api.tiktok.com');
+
+// ---------- 1) 生成授权 URL 并跳转 ----------
+$state = bin2hex(random_bytes(16)); // 建议落库，回调时校验
+$url = $auth->getAuthUrl(
+    appId: 'YOUR_APP_ID',
+    redirectUri: 'https://your.domain/api/tiktok/callback', // 须与 TikTok 后台配置一致
+    state: $state,
+);
+// return $this->response->redirect($url);
+
+// ---------- 2) 回调：auth_code 换 Token ----------
+// TikTok 回调参数：auth_code、state（失败时可能有 code / message）
+$result = $auth->handleCallback(
+    appId: 'YOUR_APP_ID',
+    secret: 'YOUR_APP_SECRET',
+    authCode: (string) $request->input('auth_code'),
+);
+// $result['access_token']
+// $result['refresh_token']
+// $result['expires_in'] / $result['refresh_expires_in']
+// $result['advertiser_ids']
+
+// 也可分步：
+// $token = $auth->fetchToken($appId, $secret, $authCode);
+// $token = $auth->refreshToken($appId, $secret, $refreshToken);
+```
+
+配置项（`config/autoload/adv.php`，发布后可选填写）：
+
+```php
+'tiktok' => [
+    'base_uri' => 'https://business-api.tiktok.com',
+    // 'app_id' => env('TIKTOK_APP_ID', ''),
+    // 'secret' => env('TIKTOK_APP_SECRET', ''),
+    // 'redirect_uri' => env('TIKTOK_REDIRECT_URI', ''),
+],
+```
+
 ### 基础 Client
 
 ```php
@@ -1018,3 +1142,5 @@ try {
 - ✅ 完整的广告系列（Campaigns）管理
 - ✅ 支持过滤条件和批量操作
 - ✅ Facebook 应用授权（dialog/oauth + 回调换长期 Token）
+- ✅ TikTok 应用授权（portal/auth + auth_code 换 Token / refresh）
+- ✅ Google Ads 应用授权（OAuth2 authorize + code/refresh 换 Token）

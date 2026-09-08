@@ -171,22 +171,54 @@ class FacebookCampaign
     }
 
     /**
-     * 批量更新广告系列状态
+     * 批量更新广告系列状态（Graph Batch，每批最多 50 条，自动限流重试）
+     *
+     * @return array<string, array{success: bool, data?: mixed, error?: string, code?: int}>
      */
     public function batchUpdateStatus(array $campaignIds, string $status): array
     {
-        $results = [];
+        $validStatuses = ['ACTIVE', 'PAUSED', 'DELETED', 'ARCHIVED'];
+        if (! in_array($status, $validStatuses, true)) {
+            throw new \InvalidArgumentException(
+                'Invalid status. Must be one of: ' . implode(', ', $validStatuses)
+            );
+        }
 
+        $campaignIds = array_values(array_filter(array_map('strval', $campaignIds)));
+        if ($campaignIds === []) {
+            return [];
+        }
+
+        $requests = [];
         foreach ($campaignIds as $campaignId) {
-            try {
+            $requests[] = [
+                'method' => 'POST',
+                'relative_url' => $campaignId,
+                'body' => http_build_query(['status' => $status]),
+            ];
+        }
+
+        $responses = $this->client->batch($requests, false, 'POST:/?batch=campaign_status');
+        $results = [];
+        foreach ($campaignIds as $index => $campaignId) {
+            $item = $responses[$index] ?? [
+                'success' => false,
+                'error' => 'Missing batch response',
+                'body' => null,
+                'code' => 0,
+            ];
+            if ($item['success']) {
                 $results[$campaignId] = [
                     'success' => true,
-                    'data' => $this->updateCampaignStatus($campaignId, $status),
+                    'data' => $item['body'],
+                    'code' => $item['code'],
                 ];
-            } catch (\Throwable $e) {
+            } else {
                 $results[$campaignId] = [
                     'success' => false,
-                    'error' => $e->getMessage(),
+                    'error' => $item['error'] !== '' ? $item['error'] : 'Batch item failed',
+                    'code' => $item['code'],
+                    'data' => $item['body'],
                 ];
             }
         }

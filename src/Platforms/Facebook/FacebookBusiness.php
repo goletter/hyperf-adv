@@ -181,32 +181,57 @@ class FacebookBusiness
     }
 
     /**
-     * 批量从 Business Manager 移除广告账户
-     * 
+     * 批量从 Business Manager 移除广告账户（Graph Batch，每批最多 50 条，自动限流重试）
+     *
      * @param string $businessId Business Manager ID
      * @param array $accountIds 账户ID数组（不需要 act_ 前缀）
-     * @return array 移除结果，格式：['account_id' => ['success' => true/false, 'data'/'error' => ...]]
+     * @return array<string, array{success: bool, data?: mixed, error?: string, code?: int}>
      */
     public function batchRemoveAdAccounts(
         string $businessId,
         array $accountIds
     ): array {
-        $results = [];
-        
+        $accountIds = array_values(array_filter(array_map('strval', $accountIds)));
+        if ($accountIds === []) {
+            return [];
+        }
+
+        $requests = [];
         foreach ($accountIds as $accountId) {
-            try {
+            $actId = 'act_' . str_replace('act_', '', $accountId);
+            $requests[] = [
+                'method' => 'DELETE',
+                'relative_url' => $businessId . '/ad_accounts?' . http_build_query([
+                    'adaccount_id' => $actId,
+                ]),
+            ];
+        }
+
+        $responses = $this->client->batch($requests, false, 'POST:/?batch=remove_ad_accounts');
+        $results = [];
+        foreach ($accountIds as $index => $accountId) {
+            $item = $responses[$index] ?? [
+                'success' => false,
+                'error' => 'Missing batch response',
+                'body' => null,
+                'code' => 0,
+            ];
+            if ($item['success']) {
                 $results[$accountId] = [
                     'success' => true,
-                    'data' => $this->removeAdAccount($businessId, $accountId),
+                    'data' => $item['body'],
+                    'code' => $item['code'],
                 ];
-            } catch (\Exception $e) {
+            } else {
                 $results[$accountId] = [
                     'success' => false,
-                    'error' => $e->getMessage(),
+                    'error' => $item['error'] !== '' ? $item['error'] : 'Batch item failed',
+                    'code' => $item['code'],
+                    'data' => $item['body'],
                 ];
             }
         }
-        
+
         return $results;
     }
 
