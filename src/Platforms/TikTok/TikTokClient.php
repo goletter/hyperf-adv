@@ -7,21 +7,26 @@ namespace Goletter\Adv\Platforms\TikTok;
 use GuzzleHttp\Client;
 use Goletter\Adv\Platforms\TikTok\Exceptions\TikTokApiException;
 use Goletter\Adv\Platforms\TikTok\Exceptions\TikTokTokenExpiredException;
+use Goletter\Adv\Support\RotatesAccessTokens;
 use GuzzleHttp\Exception\RequestException;
 
 class TikTokClient
 {
+    use RotatesAccessTokens;
+
     protected Client $http;
-    protected string $accessToken;
     protected string $baseUri;
 
     protected array $defaultHeaders = [];
 
+    /**
+     * @param string|list<string> $accessToken 单个或多个 token；失败时按顺序轮询下一个
+     */
     public function __construct(
-        string $accessToken,
+        string|array $accessToken,
         string $baseUri = 'https://business-api.tiktok.com'
     ) {
-        $this->accessToken = $accessToken;
+        $this->bootstrapAccessTokens($accessToken);
         $this->baseUri = rtrim($baseUri, '/');
 
         $this->http = new Client([
@@ -97,51 +102,53 @@ class TikTokClient
         array $query = [],
         array $body = []
     ): array {
-        try {
-            $options = [
-                'query' => $query,
-                'headers' => array_merge(
-                    [
-                        'Access-Token' => $this->accessToken,
-                        'Content-Type' => 'application/json',
-                        'Accept-Encoding' => 'identity',
-                    ],
-                    $this->defaultHeaders
-                ),
-            ];
+        return $this->withTokenFailover(function () use ($method, $uri, $query, $body): array {
+            try {
+                $options = [
+                    'query' => $query,
+                    'headers' => array_merge(
+                        [
+                            'Access-Token' => $this->accessToken,
+                            'Content-Type' => 'application/json',
+                            'Accept-Encoding' => 'identity',
+                        ],
+                        $this->defaultHeaders
+                    ),
+                ];
 
-            if ($body !== []) {
-                $options['json'] = $body;
+                if ($body !== []) {
+                    $options['json'] = $body;
+                }
+
+                if (! str_starts_with($uri, '/')) {
+                    $uri = '/' . $uri;
+                }
+
+                $response = $this->http->request($method, $uri, $options);
+                $data = json_decode((string) $response->getBody(), true);
+
+                $this->handleErrorIfNeeded($data);
+
+                return $data;
+            } catch (TikTokApiException $e) {
+                throw $e;
+            } catch (RequestException $e) {
+                $response = $e->getResponse();
+                if ($response === null) {
+                    throw new TikTokApiException($e->getMessage(), (int) $e->getCode(), [], $e);
+                }
+
+                $decoded = json_decode((string) $response->getBody(), true) ?: [];
+                $payload = [...$decoded, 'token' => $this->accessToken];
+
+                throw new TikTokApiException(
+                    json_encode($payload, JSON_UNESCAPED_UNICODE) ?: $e->getMessage(),
+                    (int) $e->getCode(),
+                    $decoded,
+                    $e
+                );
             }
-
-            if (! str_starts_with($uri, '/')) {
-                $uri = '/' . $uri;
-            }
-
-            $response = $this->http->request($method, $uri, $options);
-            $data = json_decode((string) $response->getBody(), true);
-
-            $this->handleErrorIfNeeded($data);
-
-            return $data;
-        } catch (TikTokApiException $e) {
-            throw $e;
-        } catch (RequestException $e) {
-            $response = $e->getResponse();
-            if ($response === null) {
-                throw new TikTokApiException($e->getMessage(), (int) $e->getCode(), [], $e);
-            }
-
-            $decoded = json_decode((string) $response->getBody(), true) ?: [];
-            $payload = [...$decoded, 'token' => $this->accessToken];
-
-            throw new TikTokApiException(
-                json_encode($payload, JSON_UNESCAPED_UNICODE) ?: $e->getMessage(),
-                (int) $e->getCode(),
-                $decoded,
-                $e
-            );
-        }
+        });
     }
 
     protected function handleErrorIfNeeded(?array $data): void

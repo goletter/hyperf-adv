@@ -20,6 +20,8 @@ php bin/hyperf.php vendor:publish goletter/adv
 use Goletter\Adv\AdvFactory;
 
 $adv = AdvFactory::make('facebook', $accessToken);
+// 或多个 token：当前失败则轮询下一个，直到全部试完
+// $adv = AdvFactory::make('facebook', [$token1, $token2, $token3]);
 // 或 AdvFactory::make(2, $token, ['developer_token' => '...']); // 2 = google
 
 foreach ($adv->account->iterateAccounts() as $account) {
@@ -31,6 +33,69 @@ $google = AdvFactory::make('google', $oauthToken, [
     'login_customer_id' => env('GOOGLE_ADS_LOGIN_CUSTOMER_ID'),
 ]);
 ```
+
+### Hyperf DI（读取 `config/autoload/adv.php`）
+
+发布配置后，可注入工厂；`create()` 会自动合并对应平台配置（如 `api_version`、`developer_token`）：
+
+```php
+use Goletter\Adv\AdvFactory;
+use Hyperf\Di\Annotation\Inject;
+
+class AdSyncService
+{
+    #[Inject]
+    protected AdvFactory $advFactory;
+
+    public function sync(string $token): void
+    {
+        $adv = $this->advFactory->create('facebook', $token);
+        // 等价于 AdvFactory::make(...)，容器启动后静态调用也会用到同一配置实例
+    }
+}
+```
+
+### 注册自定义平台
+
+```php
+use Goletter\Adv\AdvFactory;
+use Goletter\Adv\PlatformBundle;
+
+AdvFactory::register('custom', function (string $accessToken, array $options): PlatformBundle {
+    // 组装你的 Client / Account / Business / Campaign / Report
+    return new PlatformBundle(
+        client: $client,
+        account: $account,
+        business: $business,
+        campaign: $campaign,
+        report: $report,
+        platform: 'custom',
+    );
+});
+
+$adv = AdvFactory::make('custom', $token);
+```
+
+### 多 Token 轮询（失败切换）
+
+传入 token 数组后，单次请求从当前 token 开始；若抛出 API / Token 失效异常，自动换下一个，直到全部失败才抛出最后一次异常。成功后会粘滞在可用 token。
+
+```php
+use Goletter\Adv\AdvFactory;
+use Goletter\Adv\Platforms\Facebook\FacebookClient;
+
+$adv = AdvFactory::make('facebook', [$tokenA, $tokenB, $tokenC], [
+    'business_id' => 123,
+]);
+
+// 也可直接构造 Client
+$client = new FacebookClient([$tokenA, $tokenB]);
+$client->getAccessTokens();      // ['...', '...']
+$client->getAccessToken();       // 当前生效的 token
+$client->setAccessTokens([$tokenB, $tokenC]); // 运行时替换池
+```
+
+Facebook 在切换 token 前会打 `token-failover` 日志（若配置了 call log handler）。限流会先在当前 token 上按 `max_retries` 退避，仍失败再切下一个 token。
 
 跨平台捕获 Token 失效：
 

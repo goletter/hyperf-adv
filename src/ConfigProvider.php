@@ -10,6 +10,7 @@ class ConfigProvider
     {
         return [
             'dependencies' => [
+                AdvFactory::class => AdvFactoryFactory::class,
             ],
             'annotations' => [
                 'scan' => [

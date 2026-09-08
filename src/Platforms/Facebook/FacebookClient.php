@@ -7,11 +7,15 @@ namespace Goletter\Adv\Platforms\Facebook;
 use GuzzleHttp\Client;
 use Goletter\Adv\Platforms\Facebook\Exceptions\FacebookApiException;
 use Goletter\Adv\Platforms\Facebook\Exceptions\FacebookTokenExpiredException;
+use Goletter\Adv\Support\RotatesAccessTokens;
 use GuzzleHttp\Exception\RequestException;
 use Psr\Http\Message\ResponseInterface;
+use Throwable;
 
 class FacebookClient
 {
+    use RotatesAccessTokens;
+
     /** Graph Batch 单次最大子请求数 */
     public const BATCH_MAX_SIZE = 50;
 
@@ -19,7 +23,6 @@ class FacebookClient
     protected const RATE_LIMIT_CODES = [4, 17, 32, 613];
 
     protected Client $http;
-    protected string $accessToken;
 
     /** @deprecated 拼写保留以兼容旧调用，语义为 businessId */
     protected int $busineId;
@@ -67,13 +70,16 @@ class FacebookClient
      */
     protected static $callLogHandler = null;
 
+    /**
+     * @param string|list<string> $accessToken 单个或多个 token；失败时按顺序轮询下一个
+     */
     public function __construct(
-        string $accessToken,
+        string|array $accessToken,
         int $busineId = 0,
         int $platformId = 0,
         string $apiVersion = 'v24.0'
     ) {
-        $this->accessToken = $accessToken;
+        $this->bootstrapAccessTokens($accessToken);
         $this->busineId = $busineId;
         $this->platformId = $platformId;
         $this->apiVersion = $apiVersion;
@@ -127,11 +133,6 @@ class FacebookClient
     public function getApiVersion(): string
     {
         return $this->apiVersion;
-    }
-
-    public function getAccessToken(): string
-    {
-        return $this->accessToken;
     }
 
     /**
@@ -258,34 +259,55 @@ class FacebookClient
         string $api_interface = '',
         bool $asForm = false
     ): array {
-        $attempt = 0;
+        return $this->withTokenFailover(function () use ($method, $uri, $query, $body, $api_interface, $asForm): array {
+            $attempt = 0;
 
-        while (true) {
-            $this->paceBeforeRequest();
+            while (true) {
+                $this->paceBeforeRequest();
 
-            try {
-                return $this->sendRequest($method, $uri, $query, $body, $api_interface, $asForm);
-            } catch (FacebookApiException $e) {
-                if (! $this->isRateLimitError($e) || $attempt >= $this->maxRetries) {
-                    throw $e;
+                try {
+                    return $this->sendRequest($method, $uri, $query, $body, $api_interface, $asForm);
+                } catch (FacebookApiException $e) {
+                    if (! $this->isRateLimitError($e) || $attempt >= $this->maxRetries) {
+                        throw $e;
+                    }
+
+                    ++$attempt;
+                    $delayMs = $this->resolveBackoffDelayMs($attempt, $e);
+                    $this->safeLog(
+                        [
+                            'attempt' => $attempt,
+                            'delay_ms' => $delayMs,
+                            'uri' => $uri,
+                            'message' => $e->getMessage(),
+                            'token' => $this->accessToken,
+                        ],
+                        'rate-limit-retry',
+                        'limit'
+                    );
+                    $this->sleepMs($delayMs);
                 }
-
-                ++$attempt;
-                $delayMs = $this->resolveBackoffDelayMs($attempt, $e);
-                $this->safeLog(
-                    [
-                        'attempt' => $attempt,
-                        'delay_ms' => $delayMs,
-                        'uri' => $uri,
-                        'message' => $e->getMessage(),
-                        'token' => $this->accessToken,
-                    ],
-                    'rate-limit-retry',
-                    'limit'
-                );
-                $this->sleepMs($delayMs);
             }
-        }
+        });
+    }
+
+    protected function onAccessTokenFailover(
+        Throwable $e,
+        string $failedToken,
+        int $tried,
+        int $total
+    ): void {
+        $this->safeLog(
+            [
+                'tried' => $tried,
+                'total' => $total,
+                'failed_token' => $failedToken,
+                'next_index' => ($this->tokenIndex + 1) % max(1, $total),
+                'message' => $e->getMessage(),
+            ],
+            'token-failover',
+            'token'
+        );
     }
 
     protected function sendRequest(

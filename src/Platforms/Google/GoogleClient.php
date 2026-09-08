@@ -7,6 +7,7 @@ namespace Goletter\Adv\Platforms\Google;
 use GuzzleHttp\Client;
 use Goletter\Adv\Platforms\Google\Exceptions\GoogleApiException;
 use Goletter\Adv\Platforms\Google\Exceptions\GoogleTokenExpiredException;
+use Goletter\Adv\Support\RotatesAccessTokens;
 use GuzzleHttp\Exception\RequestException;
 
 /**
@@ -16,17 +17,32 @@ use GuzzleHttp\Exception\RequestException;
  */
 class GoogleClient
 {
+    use RotatesAccessTokens;
+
     protected Client $http;
 
     protected array $defaultHeaders = [];
 
+    protected string $developerToken;
+
+    protected string $loginCustomerId;
+
+    protected string $apiVersion;
+
+    /**
+     * @param string|list<string> $accessToken 单个或多个 OAuth token；失败时按顺序轮询下一个
+     */
     public function __construct(
-        protected string $accessToken,
-        protected string $developerToken,
-        protected string $loginCustomerId = '',
-        protected string $apiVersion = 'v19',
+        string|array $accessToken,
+        string $developerToken,
+        string $loginCustomerId = '',
+        string $apiVersion = 'v19',
         string $baseUri = 'https://googleads.googleapis.com'
     ) {
+        $this->bootstrapAccessTokens($accessToken);
+        $this->developerToken = $developerToken;
+        $this->loginCustomerId = $loginCustomerId;
+        $this->apiVersion = $apiVersion;
         $this->http = new Client([
             'base_uri' => rtrim($baseUri, '/') . '/',
             'timeout' => 120,
@@ -38,11 +54,6 @@ class GoogleClient
         $this->defaultHeaders = $headers;
 
         return $this;
-    }
-
-    public function getAccessToken(): string
-    {
-        return $this->accessToken;
     }
 
     public function getDeveloperToken(): string
@@ -140,65 +151,67 @@ class GoogleClient
             throw new GoogleApiException('Google Ads API 需要配置 developer-token', 0, []);
         }
 
-        try {
-            $headers = array_merge([
-                'Authorization' => 'Bearer ' . $this->accessToken,
-                'developer-token' => $this->developerToken,
-                'Content-Type' => 'application/json',
-            ], $this->defaultHeaders);
+        return $this->withTokenFailover(function () use ($method, $uri, $query, $body): array {
+            try {
+                $headers = array_merge([
+                    'Authorization' => 'Bearer ' . $this->accessToken,
+                    'developer-token' => $this->developerToken,
+                    'Content-Type' => 'application/json',
+                ], $this->defaultHeaders);
 
-            if ($this->loginCustomerId !== '') {
-                $headers['login-customer-id'] = self::normalizeCustomerId($this->loginCustomerId);
+                if ($this->loginCustomerId !== '') {
+                    $headers['login-customer-id'] = self::normalizeCustomerId($this->loginCustomerId);
+                }
+
+                $options = [
+                    'headers' => $headers,
+                ];
+
+                if ($query !== []) {
+                    $options['query'] = $query;
+                }
+
+                if ($body !== []) {
+                    $options['json'] = $body;
+                }
+
+                if (! str_starts_with($uri, '/')) {
+                    $uri = '/' . $uri;
+                }
+
+                $response = $this->http->request($method, $uri, $options);
+                $status = $response->getStatusCode();
+                $raw = (string) $response->getBody();
+                $data = $raw === '' ? [] : (json_decode($raw, true) ?? []);
+
+                if ($status >= 400) {
+                    $this->handleHttpError($status, $data);
+                }
+
+                if (isset($data['error'])) {
+                    $this->handleApiError($data['error'], $data);
+                }
+
+                return $data;
+            } catch (GoogleApiException $e) {
+                throw $e;
+            } catch (RequestException $e) {
+                $response = $e->getResponse();
+                if ($response === null) {
+                    throw new GoogleApiException($e->getMessage(), (int) $e->getCode(), [], $e);
+                }
+
+                $bodyContents = (string) $response->getBody();
+                $decoded = json_decode($bodyContents, true) ?: [];
+
+                throw new GoogleApiException(
+                    $bodyContents !== '' ? $bodyContents : $e->getMessage(),
+                    (int) $e->getCode(),
+                    $decoded,
+                    $e
+                );
             }
-
-            $options = [
-                'headers' => $headers,
-            ];
-
-            if ($query !== []) {
-                $options['query'] = $query;
-            }
-
-            if ($body !== []) {
-                $options['json'] = $body;
-            }
-
-            if (! str_starts_with($uri, '/')) {
-                $uri = '/' . $uri;
-            }
-
-            $response = $this->http->request($method, $uri, $options);
-            $status = $response->getStatusCode();
-            $raw = (string) $response->getBody();
-            $data = $raw === '' ? [] : (json_decode($raw, true) ?? []);
-
-            if ($status >= 400) {
-                $this->handleHttpError($status, $data);
-            }
-
-            if (isset($data['error'])) {
-                $this->handleApiError($data['error'], $data);
-            }
-
-            return $data;
-        } catch (GoogleApiException $e) {
-            throw $e;
-        } catch (RequestException $e) {
-            $response = $e->getResponse();
-            if ($response === null) {
-                throw new GoogleApiException($e->getMessage(), (int) $e->getCode(), [], $e);
-            }
-
-            $bodyContents = (string) $response->getBody();
-            $decoded = json_decode($bodyContents, true) ?: [];
-
-            throw new GoogleApiException(
-                $bodyContents !== '' ? $bodyContents : $e->getMessage(),
-                (int) $e->getCode(),
-                $decoded,
-                $e
-            );
-        }
+        });
     }
 
     protected function handleHttpError(int $status, array $data): void
