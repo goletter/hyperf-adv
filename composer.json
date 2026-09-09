@@ -1,5 +1,5 @@
 {
-    "name": "goletter/adv",
+    "name": "goletter/hyperf-adv",
     "description": "多平台广告 API SDK，支持 Facebook、TikTok、Google Ads",
     "type": "library",
     "license": "MIT",

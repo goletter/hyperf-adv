@@ -29,6 +29,7 @@ use InvalidArgumentException;
  *
  * 静态用法（兼容）：
  *   AdvFactory::make('facebook', $token)
+ *   AdvFactory::facebook($token)   // IDE 类型更精确
  *   AdvFactory::make(0, $token)
  *
  * Hyperf DI：
@@ -123,6 +124,15 @@ class AdvFactory
      *     default_headers?: array,
      *     rate_limit?: array
      * } $options
+     * @return (
+     *     $platform is 'facebook'|'fb'|'meta'|0
+     *         ? PlatformBundle<FacebookClient, FacebookAccount, FacebookBusiness, FacebookCampaign, FacebookReport>
+     *         : ($platform is 'tiktok'|'tt'|1
+     *             ? PlatformBundle<TikTokClient, TikTokAccount, TikTokBusiness, TikTokCampaign, TikTokReport>
+     *             : ($platform is 'google'|3
+     *                 ? PlatformBundle<GoogleClient, GoogleAccount, GoogleBusiness, GoogleCampaign, GoogleReport>
+     *                 : PlatformBundle))
+     * )
      */
     public static function make(string|int $platform, string|array $accessToken, array $options = []): PlatformBundle
     {
@@ -130,10 +140,49 @@ class AdvFactory
     }
 
     /**
+     * @param string|list<string> $accessToken
+     * @param array<string, mixed> $options
+     * @return PlatformBundle<FacebookClient, FacebookAccount, FacebookBusiness, FacebookCampaign, FacebookReport>
+     */
+    public static function facebook(string|array $accessToken, array $options = []): PlatformBundle
+    {
+        return self::make(self::FACEBOOK, $accessToken, $options);
+    }
+
+    /**
+     * @param string|list<string> $accessToken
+     * @param array<string, mixed> $options
+     * @return PlatformBundle<TikTokClient, TikTokAccount, TikTokBusiness, TikTokCampaign, TikTokReport>
+     */
+    public static function tiktok(string|array $accessToken, array $options = []): PlatformBundle
+    {
+        return self::make(self::TIKTOK, $accessToken, $options);
+    }
+
+    /**
+     * @param string|list<string> $accessToken
+     * @param array<string, mixed> $options
+     * @return PlatformBundle<GoogleClient, GoogleAccount, GoogleBusiness, GoogleCampaign, GoogleReport>
+     */
+    public static function google(string|array $accessToken, array $options = []): PlatformBundle
+    {
+        return self::make(self::GOOGLE, $accessToken, $options);
+    }
+
+    /**
      * 实例方法：合并 config/autoload/adv.php 后创建 Bundle。
      *
      * @param string|list<string> $accessToken
      * @param array<string, mixed> $options
+     * @return (
+     *     $platform is 'facebook'|'fb'|'meta'|0
+     *         ? PlatformBundle<FacebookClient, FacebookAccount, FacebookBusiness, FacebookCampaign, FacebookReport>
+     *         : ($platform is 'tiktok'|'tt'|1
+     *             ? PlatformBundle<TikTokClient, TikTokAccount, TikTokBusiness, TikTokCampaign, TikTokReport>
+     *             : ($platform is 'google'|3
+     *                 ? PlatformBundle<GoogleClient, GoogleAccount, GoogleBusiness, GoogleCampaign, GoogleReport>
+     *                 : PlatformBundle))
+     * )
      */
     public function create(string|int $platform, string|array $accessToken, array $options = []): PlatformBundle
     {
@@ -263,6 +312,7 @@ class AdvFactory
 
     /**
      * @param string|list<string> $accessToken
+     * @return PlatformBundle<FacebookClient, FacebookAccount, FacebookBusiness, FacebookCampaign, FacebookReport>
      */
     protected static function buildFacebook(string|array $accessToken, array $options): PlatformBundle
     {
@@ -291,6 +341,7 @@ class AdvFactory
 
     /**
      * @param string|list<string> $accessToken
+     * @return PlatformBundle<TikTokClient, TikTokAccount, TikTokBusiness, TikTokCampaign, TikTokReport>
      */
     protected static function buildTikTok(string|array $accessToken, array $options): PlatformBundle
     {
@@ -315,6 +366,7 @@ class AdvFactory
 
     /**
      * @param string|list<string> $accessToken
+     * @return PlatformBundle<GoogleClient, GoogleAccount, GoogleBusiness, GoogleCampaign, GoogleReport>
      */
     protected static function buildGoogle(string|array $accessToken, array $options): PlatformBundle
     {

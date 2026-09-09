@@ -19,16 +19,17 @@ php bin/hyperf.php vendor:publish goletter/adv
 ```php
 use Goletter\Adv\AdvFactory;
 
-$adv = AdvFactory::make('facebook', $accessToken);
+// 推荐：平台专用方法，IDE 可跳转到 FacebookAccount 等具体类
+$adv = AdvFactory::facebook($accessToken);
 // 或多个 token：当前失败则轮询下一个，直到全部试完
-// $adv = AdvFactory::make('facebook', [$token1, $token2, $token3]);
-// 或 AdvFactory::make(3, $token, ['developer_token' => '...']); // 3 = google
+// $adv = AdvFactory::facebook([$token1, $token2, $token3]);
+// 或 AdvFactory::make('facebook', $accessToken); // 通用入口，效果相同
 
 foreach ($adv->account->iterateAccounts() as $account) {
     // ...
 }
 
-$google = AdvFactory::make('google', $oauthToken, [
+$google = AdvFactory::google($oauthToken, [
     'developer_token' => env('GOOGLE_ADS_DEVELOPER_TOKEN'),
     'login_customer_id' => env('GOOGLE_ADS_LOGIN_CUSTOMER_ID'),
 ]);
@@ -57,18 +58,25 @@ class AdSyncService
 
 ### 注册自定义平台
 
+`PlatformBundle` 的 client / account / business / campaign / report 须为已支持平台类型（Facebook / TikTok / Google 对应类），以便 IDE 跳转与类型检查。自定义平台通常基于现有实现扩展或包装：
+
 ```php
 use Goletter\Adv\AdvFactory;
 use Goletter\Adv\PlatformBundle;
+use Goletter\Adv\Platforms\Facebook\FacebookAccount;
+use Goletter\Adv\Platforms\Facebook\FacebookBusiness;
+use Goletter\Adv\Platforms\Facebook\FacebookCampaign;
+use Goletter\Adv\Platforms\Facebook\FacebookClient;
+use Goletter\Adv\Platforms\Facebook\FacebookReport;
 
 AdvFactory::register('custom', function (string $accessToken, array $options): PlatformBundle {
-    // 组装你的 Client / Account / Business / Campaign / Report
+    $client = new FacebookClient($accessToken);
     return new PlatformBundle(
         client: $client,
-        account: $account,
-        business: $business,
-        campaign: $campaign,
-        report: $report,
+        account: new FacebookAccount($client),
+        business: new FacebookBusiness($client),
+        campaign: new FacebookCampaign($client),
+        report: new FacebookReport($client),
         platform: 'custom',
     );
 });
@@ -84,7 +92,8 @@ $adv = AdvFactory::make('custom', $token);
 use Goletter\Adv\AdvFactory;
 use Goletter\Adv\Platforms\Facebook\FacebookClient;
 
-$adv = AdvFactory::make('facebook', [$tokenA, $tokenB, $tokenC]);
+$adv = AdvFactory::facebook([$tokenA, $tokenB, $tokenC]);
+// 或 AdvFactory::make('facebook', [$tokenA, $tokenB, $tokenC]);
 
 // 也可直接构造 Client
 $client = new FacebookClient([$tokenA, $tokenB]);
