@@ -5,13 +5,13 @@
 ## 安装
 
 ```bash
-composer require goletter/adv
+composer require goletter/hyperf-adv
 ```
 
 Hyperf 项目可发布配置：
 
 ```bash
-php bin/hyperf.php vendor:publish goletter/adv
+php bin/hyperf.php vendor:publish goletter/hyperf-adv
 ```
 
 ## 快速开始（推荐）

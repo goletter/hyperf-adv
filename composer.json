@@ -19,7 +19,7 @@
         "hyperf-adv"
     ],
     "replace": {
-        "goletter/hyperf-adv": "self.version"
+        "goletter/adv": "self.version"
     },
     "require": {
         "php": ">=8.1",
