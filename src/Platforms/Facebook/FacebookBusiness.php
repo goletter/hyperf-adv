@@ -8,6 +8,8 @@ class FacebookBusiness
 {
     protected ?FacebookAccount $account = null;
 
+    protected ?FacebookPixel $pixel = null;
+
     public function __construct(
         protected FacebookClient $client
     ) {}
@@ -15,6 +17,11 @@ class FacebookBusiness
     protected function account(): FacebookAccount
     {
         return $this->account ??= new FacebookAccount($this->client);
+    }
+
+    protected function pixel(): FacebookPixel
+    {
+        return $this->pixel ??= new FacebookPixel($this->client);
     }
 
     /**
@@ -359,79 +366,72 @@ class FacebookBusiness
      * 查询待审批的像素
      * GET /{business_id}/pending_shared_offsite_signal_container_business_objects
      * primary_container_id = 像素ID
+     *
+     * @deprecated 请使用 FacebookPixel::listPendingSharedPixels()
      */
     public function getPendingSharedPixels(
         string $businessId,
-        array $fields = ['id', 'primary_container_id', 'business', 'name', 'is_unavailable', 'agreement']
+        array $fields = FacebookPixel::DEFAULT_PENDING_SHARED_FIELDS
     ): array {
-        return $this->client->get("/{$businessId}/pending_shared_offsite_signal_container_business_objects", [
-            'fields' => implode(',', $fields),
-        ], 'GET:/{business_id}/pending_shared_offsite_signal_container_business_objects');
+        return $this->pixel()->listPendingSharedPixels($businessId, $fields);
     }
 
     /**
      * 接收像素：审批资产共享协议
      * POST /{agreement_id}?request_status=APPROVE
+     *
+     * @deprecated 请使用 FacebookPixel::approveAssetSharingAgreement()
      */
     public function approveAssetSharingAgreement(string $agreementId): array
     {
-        return $this->client->post("/{$agreementId}", [
-            'request_status' => 'APPROVE',
-        ], [], 'POST:/{agreement_id}');
+        return $this->pixel()->approveAssetSharingAgreement($agreementId);
     }
 
     /**
      * 像素共享到广告账户
      * POST /{pixel_id}/shared_accounts
+     *
+     * @deprecated 请使用 FacebookPixel::shareToAdAccount()
      */
     public function sharePixelToAdAccount(string $pixelId, string $businessId, string $accountId): array
     {
-        $accountId = preg_replace('/^act_/i', '', $accountId) ?: $accountId;
-
-        return $this->client->post("/{$pixelId}/shared_accounts", [
-            'business' => $businessId,
-            'account_id' => $accountId,
-        ], [], 'POST:/{pixel_id}/shared_accounts');
+        return $this->pixel()->shareToAdAccount($pixelId, $businessId, $accountId);
     }
 
     /**
      * 像素已共享的广告账户列表
      * GET /{pixel_id}/shared_accounts?business={business_id}&fields=id,name,account_status
+     *
+     * @deprecated 请使用 FacebookPixel::listSharedAccounts()
      */
     public function getPixelSharedAccounts(
         string $pixelId,
         string $businessId,
-        array $fields = ['id', 'name', 'account_status']
+        array $fields = FacebookPixel::DEFAULT_SHARED_ACCOUNT_FIELDS
     ): array {
-        return $this->client->getAll("/{$pixelId}/shared_accounts", [
-            'business' => $businessId,
-            'fields' => implode(',', $fields),
-            'limit' => 500,
-        ], 'GET:/{pixel_id}/shared_accounts');
+        return $this->pixel()->listSharedAccounts($pixelId, $businessId, $fields);
     }
 
     /**
      * BM 下客户端像素列表
      * GET /{business_id}/client_pixels?fields=id,name
+     *
+     * @deprecated 请使用 FacebookPixel::listClientPixels()
      */
-    public function getClientPixels(string $businessId, array $fields = ['id', 'name']): array
+    public function getClientPixels(string $businessId, array $fields = FacebookPixel::DEFAULT_PIXEL_FIELDS): array
     {
-        return $this->client->getAll("/{$businessId}/client_pixels", [
-            'fields' => implode(',', $fields),
-            'limit' => 500,
-        ], 'GET:/{business_id}/client_pixels');
+        return $this->pixel()->listClientPixels($businessId, $fields);
     }
 
     /**
      * BM 下自有像素列表
      * GET /{business_id}/owned_pixels?fields=id,name
+     *
+     * @deprecated 请使用 FacebookPixel::listOwnedPixels()
      */
-    public function getOwnedPixels(string $businessId, array $fields = ['id', 'name']): array
+    public function getOwnedPixels(string $businessId, array $fields = FacebookPixel::DEFAULT_PIXEL_FIELDS): array
     {
-        return $this->client->getAll("/{$businessId}/owned_pixels", [
-            'fields' => implode(',', $fields),
-            'limit' => 500,
-        ], 'GET:/{business_id}/owned_pixels');
+        return $this->pixel()->listOwnedPixels($businessId, $fields);
     }
 
     /**

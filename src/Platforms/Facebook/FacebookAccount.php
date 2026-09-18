@@ -519,18 +519,6 @@ class FacebookAccount
             return self::$defaultBusinessInfo;
         }
 
-        $appName = $this->resolveAppName();
-        if ($appName === 'zhixing') {
-            return [
-                'business_country_code' => 'US',
-                'business_street' => '1401 21st Street',
-                'business_street2' => 'ste r',
-                'business_city' => 'Sacramento',
-                'business_state' => 'CA',
-                'business_zip' => '95811',
-            ];
-        }
-
         return [
             'business_country_code' => 'US',
             'business_street' => 'Beach',
@@ -538,14 +526,5 @@ class FacebookAccount
             'business_state' => 'FL',
             'business_zip' => '33140',
         ];
-    }
-
-    protected function resolveAppName(): string
-    {
-        if (function_exists('Hyperf\\Support\\env')) {
-            return (string) \Hyperf\Support\env('APP_NAME', '');
-        }
-
-        return (string) (getenv('APP_NAME') ?: ($_ENV['APP_NAME'] ?? ''));
     }
 }

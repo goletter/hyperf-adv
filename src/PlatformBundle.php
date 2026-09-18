@@ -7,7 +7,9 @@ namespace Goletter\Adv;
 use Goletter\Adv\Platforms\Facebook\FacebookAccount;
 use Goletter\Adv\Platforms\Facebook\FacebookBusiness;
 use Goletter\Adv\Platforms\Facebook\FacebookCampaign;
+use Goletter\Adv\Platforms\Facebook\FacebookCatalog;
 use Goletter\Adv\Platforms\Facebook\FacebookClient;
+use Goletter\Adv\Platforms\Facebook\FacebookPixel;
 use Goletter\Adv\Platforms\Facebook\FacebookReport;
 use Goletter\Adv\Platforms\Google\GoogleAccount;
 use Goletter\Adv\Platforms\Google\GoogleBusiness;
@@ -34,6 +36,8 @@ use Goletter\Adv\Platforms\TikTok\TikTokReport;
  * @property-read TBusiness $business
  * @property-read TCampaign $campaign
  * @property-read TReport $report
+ * @property-read FacebookCatalog|null $catalog Facebook 专用；其它平台为 null
+ * @property-read FacebookPixel|null $pixel Facebook 专用；其它平台为 null
  */
 final class PlatformBundle
 {
@@ -51,5 +55,7 @@ final class PlatformBundle
         public readonly FacebookCampaign|TikTokCampaign|GoogleCampaign $campaign,
         public readonly FacebookReport|TikTokReport|GoogleReport $report,
         public readonly string $platform,
+        public readonly ?FacebookCatalog $catalog = null,
+        public readonly ?FacebookPixel $pixel = null,
     ) {}
 }

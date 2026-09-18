@@ -8,7 +8,9 @@ use Goletter\Adv\Platforms\Facebook\FacebookAccount;
 use Goletter\Adv\Platforms\Facebook\FacebookAuth;
 use Goletter\Adv\Platforms\Facebook\FacebookBusiness;
 use Goletter\Adv\Platforms\Facebook\FacebookCampaign;
+use Goletter\Adv\Platforms\Facebook\FacebookCatalog;
 use Goletter\Adv\Platforms\Facebook\FacebookClient;
+use Goletter\Adv\Platforms\Facebook\FacebookPixel;
 use Goletter\Adv\Platforms\Facebook\FacebookReport;
 use Goletter\Adv\Platforms\Google\GoogleAccount;
 use Goletter\Adv\Platforms\Google\GoogleAuth;
@@ -336,6 +338,8 @@ class AdvFactory
             campaign: new FacebookCampaign($client),
             report: new FacebookReport($client),
             platform: self::FACEBOOK,
+            catalog: new FacebookCatalog($client),
+            pixel: new FacebookPixel($client),
         );
     }
 

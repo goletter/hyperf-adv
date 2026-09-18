@@ -58,7 +58,7 @@ class AdSyncService
 
 ### 注册自定义平台
 
-`PlatformBundle` 的 client / account / business / campaign / report 须为已支持平台类型（Facebook / TikTok / Google 对应类），以便 IDE 跳转与类型检查。自定义平台通常基于现有实现扩展或包装：
+`PlatformBundle` 的 client / account / business / campaign / report 须为已支持平台类型（Facebook / TikTok / Google 对应类），以便 IDE 跳转与类型检查。Facebook Bundle 另含 `catalog`、`pixel`（其它平台为 `null`）。自定义平台通常基于现有实现扩展或包装：
 
 ```php
 use Goletter\Adv\AdvFactory;
@@ -66,7 +66,9 @@ use Goletter\Adv\PlatformBundle;
 use Goletter\Adv\Platforms\Facebook\FacebookAccount;
 use Goletter\Adv\Platforms\Facebook\FacebookBusiness;
 use Goletter\Adv\Platforms\Facebook\FacebookCampaign;
+use Goletter\Adv\Platforms\Facebook\FacebookCatalog;
 use Goletter\Adv\Platforms\Facebook\FacebookClient;
+use Goletter\Adv\Platforms\Facebook\FacebookPixel;
 use Goletter\Adv\Platforms\Facebook\FacebookReport;
 
 AdvFactory::register('custom', function (string $accessToken, array $options): PlatformBundle {
@@ -78,6 +80,8 @@ AdvFactory::register('custom', function (string $accessToken, array $options): P
         campaign: new FacebookCampaign($client),
         report: new FacebookReport($client),
         platform: 'custom',
+        catalog: new FacebookCatalog($client),
+        pixel: new FacebookPixel($client),
     );
 });
 
@@ -533,6 +537,121 @@ $campaign->archiveCampaign('CAMPAIGN_ID'); // 归档
 
 // 批量更新状态（内部走 Graph Batch，每批最多 50，自动限流重试）
 $results = $campaign->batchUpdateStatus(['CAMPAIGN_ID_1', 'CAMPAIGN_ID_2'], 'PAUSED');
+```
+
+### 商品目录管理 (FacebookCatalog)
+
+需要 `catalog_management`（及通常的 `business_management`）权限。也可通过 `AdvFactory::facebook($token)->catalog` 使用。
+
+```php
+use Goletter\Adv\Platforms\Facebook\FacebookClient;
+use Goletter\Adv\Platforms\Facebook\FacebookCatalog;
+
+$client = new FacebookClient('YOUR_ACCESS_TOKEN');
+$catalog = new FacebookCatalog($client);
+
+// 创建商品目录（Business 拥有）
+$newCatalog = $catalog->createCatalog(
+    'BUSINESS_ID',
+    '我的商品目录',
+    'commerce', // vertical：commerce / hotels / flights / destinations / vehicles 等
+    [
+        // 'parent_catalog_id' => '...',
+        // 'store_catalog_settings' => ['page_id' => 'PAGE_ID'],
+    ]
+);
+
+// 列出 BM 拥有 / 客户共享的目录
+$owned = $catalog->listOwnedCatalogs('BUSINESS_ID');
+$clientCatalogs = $catalog->listClientCatalogs('BUSINESS_ID');
+
+foreach ($catalog->iterateOwnedCatalogs('BUSINESS_ID') as $item) {
+    echo $item['name'] . PHP_EOL;
+}
+
+// 目录详情 / 更新 / 删除
+$detail = $catalog->getCatalog('CATALOG_ID');
+$catalog->updateCatalog('CATALOG_ID', ['name' => '新名称']);
+$catalog->deleteCatalog('CATALOG_ID');
+
+// 商品：列表 / 创建 / 更新 / 删除
+$products = $catalog->listProducts('CATALOG_ID');
+$catalog->createProduct('CATALOG_ID', [
+    'retailer_id' => 'SKU-001',
+    'name' => '示例商品',
+    'description' => '描述',
+    'url' => 'https://example.com/p/1',
+    'image_url' => 'https://example.com/p/1.jpg',
+    'price' => '99.00 USD',
+    'availability' => 'in stock',
+]);
+$catalog->updateProduct('PRODUCT_ITEM_ID', ['price' => '89.00 USD']);
+$catalog->deleteProduct('PRODUCT_ITEM_ID');
+
+// 批量写入商品（Catalog Batch API）
+$catalog->itemsBatch('CATALOG_ID', [
+    [
+        'method' => 'CREATE',
+        'retailer_id' => 'SKU-002',
+        'data' => [
+            'name' => '批量商品',
+            'url' => 'https://example.com/p/2',
+            'image_url' => 'https://example.com/p/2.jpg',
+            'price' => '49.00 USD',
+            'availability' => 'in stock',
+        ],
+    ],
+]);
+
+// 商品集
+$sets = $catalog->listProductSets('CATALOG_ID');
+$catalog->createProductSet('CATALOG_ID', '在售商品', [
+    'availability' => ['eq' => 'in stock'],
+]);
+$catalog->updateProductSet('PRODUCT_SET_ID', ['name' => '新集合名']);
+$catalog->deleteProductSet('PRODUCT_SET_ID');
+
+// 商品 Feed
+$feeds = $catalog->listProductFeeds('CATALOG_ID');
+$catalog->createProductFeed('CATALOG_ID', '主 Feed', [
+    // 'schedule' => [...],
+]);
+$catalog->deleteProductFeed('FEED_ID');
+```
+
+### 像素管理 (FacebookPixel)
+
+也可通过 `AdvFactory::facebook($token)->pixel` 使用。`FacebookBusiness` 上原有像素方法仍可用，但已标记 `@deprecated`，建议迁移到本类。
+
+```php
+use Goletter\Adv\Platforms\Facebook\FacebookClient;
+use Goletter\Adv\Platforms\Facebook\FacebookPixel;
+
+$client = new FacebookClient('YOUR_ACCESS_TOKEN');
+$pixel = new FacebookPixel($client);
+
+// 创建像素
+$newPixel = $pixel->createPixel('BUSINESS_ID', '我的像素');
+
+// 自有 / 客户像素列表
+$owned = $pixel->listOwnedPixels('BUSINESS_ID');
+$clientPixels = $pixel->listClientPixels('BUSINESS_ID');
+
+foreach ($pixel->iterateOwnedPixels('BUSINESS_ID') as $item) {
+    echo $item['name'] . PHP_EOL;
+}
+
+// 像素详情
+$detail = $pixel->getPixel('PIXEL_ID');
+
+// 待审批共享像素 + 审批协议
+$pending = $pixel->listPendingSharedPixels('BUSINESS_ID');
+$pixel->approveAssetSharingAgreement('AGREEMENT_ID');
+
+// 共享到广告账户 / 取消共享 / 已共享账户列表
+$pixel->shareToAdAccount('PIXEL_ID', 'BUSINESS_ID', 'ACCOUNT_ID');
+$pixel->unshareFromAdAccount('PIXEL_ID', 'BUSINESS_ID', 'ACCOUNT_ID');
+$sharedAccounts = $pixel->listSharedAccounts('PIXEL_ID', 'BUSINESS_ID');
 ```
 
 ### 报告查询 (FacebookReport)
