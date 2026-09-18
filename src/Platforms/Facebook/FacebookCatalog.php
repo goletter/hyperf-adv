@@ -17,6 +17,9 @@ use Goletter\Adv\Support\Arr;
  * - /{product_catalog_id}/product_sets
  * - /{product_catalog_id}/product_feeds
  * - /{product_catalog_id}/items_batch
+ * - /{product_catalog_id}/agencies
+ * - /{product_catalog_id}/assigned_users
+ * - /{user_id}/assigned_product_catalogs
  */
 class FacebookCatalog
 {
@@ -26,6 +29,25 @@ class FacebookCatalog
         'vertical',
         'product_count',
         'business',
+    ];
+
+    public const DEFAULT_AGENCY_FIELDS = [
+        'id',
+        'name',
+    ];
+
+    public const DEFAULT_ASSIGNED_USER_FIELDS = [
+        'id',
+        'name',
+        'tasks',
+    ];
+
+    /** 目录可分配任务：MANAGE、ADVERTISE、MANAGE_AR、AA_ANALYZE */
+    public const VALID_ASSIGNED_USER_TASKS = [
+        'MANAGE',
+        'ADVERTISE',
+        'MANAGE_AR',
+        'AA_ANALYZE',
     ];
 
     public const DEFAULT_PRODUCT_FIELDS = [
@@ -206,6 +228,194 @@ class FacebookCatalog
             "/{$catalogId}",
             [],
             'DELETE:/{product_catalog_id}'
+        );
+    }
+
+    /**
+     * 获取对目录有访问权限的代理商 / 业务（Agencies）
+     * GET /{catalog_id}/agencies
+     */
+    public function listAgencies(
+        string $catalogId,
+        array $fields = self::DEFAULT_AGENCY_FIELDS,
+        int $limit = 100
+    ): array {
+        $agencies = $this->client->getAll(
+            "/{$catalogId}/agencies",
+            [
+                'fields' => implode(',', $fields),
+                'limit' => $limit,
+            ],
+            'GET:/{catalog_id}/agencies'
+        );
+
+        return Arr::uniqueBy($agencies, 'id');
+    }
+
+    /**
+     * 流式遍历目录 Agencies
+     * GET /{catalog_id}/agencies
+     */
+    public function iterateAgencies(
+        string $catalogId,
+        array $fields = self::DEFAULT_AGENCY_FIELDS,
+        int $limit = 100
+    ): \Generator {
+        yield from Arr::uniqueGenerator(
+            $this->client->paginate(
+                "/{$catalogId}/agencies",
+                [
+                    'fields' => implode(',', $fields),
+                    'limit' => $limit,
+                ],
+                'GET:/{catalog_id}/agencies'
+            ),
+            'id'
+        );
+    }
+
+    /**
+     * 为目录分配用户权限
+     * POST /{catalog_id}/assigned_users
+     *
+     * @param string $catalogId 目录 ID
+     * @param string $userId Business User / System User ID
+     * @param array $tasks 任务列表，如 ['MANAGE', 'ADVERTISE']
+     * @param string|null $businessId 所属 Business ID（推荐传入）
+     */
+    public function addAssignedUser(
+        string $catalogId,
+        string $userId,
+        array $tasks = ['MANAGE', 'ADVERTISE'],
+        ?string $businessId = null
+    ): array {
+        $tasks = $this->normalizeAssignedUserTasks($tasks);
+
+        $body = [
+            'user' => $userId,
+            'tasks' => $tasks,
+        ];
+        if ($businessId !== null && $businessId !== '') {
+            $body['business'] = $businessId;
+        }
+
+        return $this->client->post(
+            "/{$catalogId}/assigned_users",
+            $body,
+            [],
+            'POST:/{catalog_id}/assigned_users'
+        );
+    }
+
+    /**
+     * 获取目录已分配用户
+     * GET /{catalog_id}/assigned_users?business={business_id}
+     */
+    public function listAssignedUsers(
+        string $catalogId,
+        string $businessId,
+        array $fields = self::DEFAULT_ASSIGNED_USER_FIELDS,
+        int $limit = 100
+    ): array {
+        $users = $this->client->getAll(
+            "/{$catalogId}/assigned_users",
+            [
+                'business' => $businessId,
+                'fields' => implode(',', $fields),
+                'limit' => $limit,
+            ],
+            'GET:/{catalog_id}/assigned_users'
+        );
+
+        return Arr::uniqueBy($users, 'id');
+    }
+
+    /**
+     * 流式遍历目录已分配用户
+     */
+    public function iterateAssignedUsers(
+        string $catalogId,
+        string $businessId,
+        array $fields = self::DEFAULT_ASSIGNED_USER_FIELDS,
+        int $limit = 100
+    ): \Generator {
+        yield from Arr::uniqueGenerator(
+            $this->client->paginate(
+                "/{$catalogId}/assigned_users",
+                [
+                    'business' => $businessId,
+                    'fields' => implode(',', $fields),
+                    'limit' => $limit,
+                ],
+                'GET:/{catalog_id}/assigned_users'
+            ),
+            'id'
+        );
+    }
+
+    /**
+     * 移除目录已分配用户
+     * DELETE /{catalog_id}/assigned_users
+     */
+    public function removeAssignedUser(
+        string $catalogId,
+        string $userId,
+        ?string $businessId = null
+    ): array {
+        $query = ['user' => $userId];
+        if ($businessId !== null && $businessId !== '') {
+            $query['business'] = $businessId;
+        }
+
+        return $this->client->delete(
+            "/{$catalogId}/assigned_users",
+            $query,
+            'DELETE:/{catalog_id}/assigned_users'
+        );
+    }
+
+    /**
+     * 获取用户已被分配权限的商品目录
+     * GET /{user_id}/assigned_product_catalogs
+     *
+     * @param string $userId Business User / System User / Pending User ID
+     */
+    public function listAssignedProductCatalogs(
+        string $userId,
+        array $fields = self::DEFAULT_CATALOG_FIELDS,
+        int $limit = 100
+    ): array {
+        $catalogs = $this->client->getAll(
+            "/{$userId}/assigned_product_catalogs",
+            [
+                'fields' => implode(',', $fields),
+                'limit' => $limit,
+            ],
+            'GET:/{user_id}/assigned_product_catalogs'
+        );
+
+        return Arr::uniqueBy($catalogs, 'id');
+    }
+
+    /**
+     * 流式遍历用户已被分配的商品目录
+     * GET /{user_id}/assigned_product_catalogs
+     */
+    public function iterateAssignedProductCatalogs(
+        string $userId,
+        array $fields = self::DEFAULT_CATALOG_FIELDS,
+        int $limit = 100
+    ): \Generator {
+        yield from Arr::uniqueGenerator(
+            $this->client->paginate(
+                "/{$userId}/assigned_product_catalogs",
+                [
+                    'fields' => implode(',', $fields),
+                    'limit' => $limit,
+                ],
+                'GET:/{user_id}/assigned_product_catalogs'
+            ),
+            'id'
         );
     }
 
@@ -530,5 +740,33 @@ class FacebookCatalog
         }
 
         return $params;
+    }
+
+    /**
+     * @param list<string> $tasks
+     * @return list<string>
+     */
+    protected function normalizeAssignedUserTasks(array $tasks): array
+    {
+        $normalized = [];
+        foreach ($tasks as $task) {
+            $task = strtoupper(trim((string) $task));
+            if ($task === '') {
+                continue;
+            }
+            if (! in_array($task, self::VALID_ASSIGNED_USER_TASKS, true)) {
+                throw new \InvalidArgumentException(
+                    'Invalid catalog task. Must be one of: ' . implode(', ', self::VALID_ASSIGNED_USER_TASKS)
+                );
+            }
+            $normalized[] = $task;
+        }
+
+        $normalized = array_values(array_unique($normalized));
+        if ($normalized === []) {
+            throw new \InvalidArgumentException('tasks 不能为空');
+        }
+
+        return $normalized;
     }
 }

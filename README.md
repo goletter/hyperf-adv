@@ -574,6 +574,28 @@ $detail = $catalog->getCatalog('CATALOG_ID');
 $catalog->updateCatalog('CATALOG_ID', ['name' => '新名称']);
 $catalog->deleteCatalog('CATALOG_ID');
 
+// 对目录有访问权限的代理商 / 业务
+$agencies = $catalog->listAgencies('CATALOG_ID');
+foreach ($catalog->iterateAgencies('CATALOG_ID') as $agency) {
+    echo $agency['name'] . PHP_EOL;
+}
+
+// 分配用户到目录（POST /{catalog_id}/assigned_users）
+$catalog->addAssignedUser(
+    'CATALOG_ID',
+    'BUSINESS_SCOPED_USER_ID',
+    ['MANAGE', 'ADVERTISE'],
+    'BUSINESS_ID'
+);
+$assignedUsers = $catalog->listAssignedUsers('CATALOG_ID', 'BUSINESS_ID');
+$catalog->removeAssignedUser('CATALOG_ID', 'BUSINESS_SCOPED_USER_ID', 'BUSINESS_ID');
+
+// 用户已被分配的目录（GET /{user_id}/assigned_product_catalogs）
+$userCatalogs = $catalog->listAssignedProductCatalogs('BUSINESS_SCOPED_USER_ID');
+foreach ($catalog->iterateAssignedProductCatalogs('SYSTEM_USER_ID') as $item) {
+    echo $item['name'] . PHP_EOL;
+}
+
 // 商品：列表 / 创建 / 更新 / 删除
 $products = $catalog->listProducts('CATALOG_ID');
 $catalog->createProduct('CATALOG_ID', [
