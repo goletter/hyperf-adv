@@ -4,30 +4,15 @@ declare(strict_types=1);
 
 namespace Goletter\Adv;
 
-use Goletter\Adv\Platforms\Facebook\FacebookAccount;
-use Goletter\Adv\Platforms\Facebook\FacebookAuth;
-use Goletter\Adv\Platforms\Facebook\FacebookBusiness;
-use Goletter\Adv\Platforms\Facebook\FacebookCampaign;
-use Goletter\Adv\Platforms\Facebook\FacebookCatalog;
-use Goletter\Adv\Platforms\Facebook\FacebookClient;
-use Goletter\Adv\Platforms\Facebook\FacebookPixel;
-use Goletter\Adv\Platforms\Facebook\FacebookReport;
-use Goletter\Adv\Platforms\Google\GoogleAccount;
-use Goletter\Adv\Platforms\Google\GoogleAuth;
-use Goletter\Adv\Platforms\Google\GoogleBusiness;
-use Goletter\Adv\Platforms\Google\GoogleCampaign;
-use Goletter\Adv\Platforms\Google\GoogleClient;
-use Goletter\Adv\Platforms\Google\GoogleReport;
-use Goletter\Adv\Platforms\TikTok\TikTokAccount;
-use Goletter\Adv\Platforms\TikTok\TikTokAuth;
-use Goletter\Adv\Platforms\TikTok\TikTokBusiness;
-use Goletter\Adv\Platforms\TikTok\TikTokCampaign;
-use Goletter\Adv\Platforms\TikTok\TikTokClient;
-use Goletter\Adv\Platforms\TikTok\TikTokReport;
 use InvalidArgumentException;
 
 /**
  * 多平台广告 SDK 工厂。
+ *
+ * 平台实现在独立扩展包中，并注册到这里：
+ *   goletter/hyperf-adv-facebook
+ *   goletter/hyperf-adv-tiktok
+ *   goletter/hyperf-adv-google
  *
  * 静态用法（兼容）：
  *   AdvFactory::make('facebook', $token)
@@ -46,6 +31,20 @@ class AdvFactory
     public const FACEBOOK = 'facebook';
     public const TIKTOK = 'tiktok';
     public const GOOGLE = 'google';
+
+    /** @var array<string, string> */
+    protected static array $platformPackages = [
+        self::FACEBOOK => 'goletter/hyperf-adv-facebook',
+        self::TIKTOK => 'goletter/hyperf-adv-tiktok',
+        self::GOOGLE => 'goletter/hyperf-adv-google',
+    ];
+
+    /** @var array<string, class-string> */
+    protected static array $platformClasses = [
+        self::FACEBOOK => 'Goletter\\Adv\\Platforms\\Facebook\\FacebookPlatform',
+        self::TIKTOK => 'Goletter\\Adv\\Platforms\\TikTok\\TikTokPlatform',
+        self::GOOGLE => 'Goletter\\Adv\\Platforms\\Google\\GooglePlatform',
+    ];
 
     /** @var array<int|string, string> */
     protected static array $defaultAliases = [
@@ -105,7 +104,9 @@ class AdvFactory
      */
     public static function register(string $platform, callable $creator): void
     {
-        self::bootDefaults();
+        if (! self::$defaultsBooted) {
+            self::bootDefaults();
+        }
         self::$creators[strtolower(trim($platform))] = $creator;
     }
 
@@ -126,15 +127,6 @@ class AdvFactory
      *     default_headers?: array,
      *     rate_limit?: array
      * } $options
-     * @return (
-     *     $platform is 'facebook'|'fb'|'meta'|0
-     *         ? PlatformBundle<FacebookClient, FacebookAccount, FacebookBusiness, FacebookCampaign, FacebookReport>
-     *         : ($platform is 'tiktok'|'tt'|1
-     *             ? PlatformBundle<TikTokClient, TikTokAccount, TikTokBusiness, TikTokCampaign, TikTokReport>
-     *             : ($platform is 'google'|3
-     *                 ? PlatformBundle<GoogleClient, GoogleAccount, GoogleBusiness, GoogleCampaign, GoogleReport>
-     *                 : PlatformBundle))
-     * )
      */
     public static function make(string|int $platform, string|array $accessToken, array $options = []): PlatformBundle
     {
@@ -144,7 +136,7 @@ class AdvFactory
     /**
      * @param string|list<string> $accessToken
      * @param array<string, mixed> $options
-     * @return PlatformBundle<FacebookClient, FacebookAccount, FacebookBusiness, FacebookCampaign, FacebookReport>
+     * @return PlatformBundle<\Goletter\Adv\Platforms\Facebook\FacebookClient, \Goletter\Adv\Platforms\Facebook\FacebookAccount, \Goletter\Adv\Platforms\Facebook\FacebookBusiness, \Goletter\Adv\Platforms\Facebook\FacebookCampaign, \Goletter\Adv\Platforms\Facebook\FacebookReport>
      */
     public static function facebook(string|array $accessToken, array $options = []): PlatformBundle
     {
@@ -154,7 +146,7 @@ class AdvFactory
     /**
      * @param string|list<string> $accessToken
      * @param array<string, mixed> $options
-     * @return PlatformBundle<TikTokClient, TikTokAccount, TikTokBusiness, TikTokCampaign, TikTokReport>
+     * @return PlatformBundle<\Goletter\Adv\Platforms\TikTok\TikTokClient, \Goletter\Adv\Platforms\TikTok\TikTokAccount, \Goletter\Adv\Platforms\TikTok\TikTokBusiness, \Goletter\Adv\Platforms\TikTok\TikTokCampaign, \Goletter\Adv\Platforms\TikTok\TikTokReport>
      */
     public static function tiktok(string|array $accessToken, array $options = []): PlatformBundle
     {
@@ -164,7 +156,7 @@ class AdvFactory
     /**
      * @param string|list<string> $accessToken
      * @param array<string, mixed> $options
-     * @return PlatformBundle<GoogleClient, GoogleAccount, GoogleBusiness, GoogleCampaign, GoogleReport>
+     * @return PlatformBundle<\Goletter\Adv\Platforms\Google\GoogleClient, \Goletter\Adv\Platforms\Google\GoogleAccount, \Goletter\Adv\Platforms\Google\GoogleBusiness, \Goletter\Adv\Platforms\Google\GoogleCampaign, \Goletter\Adv\Platforms\Google\GoogleReport>
      */
     public static function google(string|array $accessToken, array $options = []): PlatformBundle
     {
@@ -176,21 +168,17 @@ class AdvFactory
      *
      * @param string|list<string> $accessToken
      * @param array<string, mixed> $options
-     * @return (
-     *     $platform is 'facebook'|'fb'|'meta'|0
-     *         ? PlatformBundle<FacebookClient, FacebookAccount, FacebookBusiness, FacebookCampaign, FacebookReport>
-     *         : ($platform is 'tiktok'|'tt'|1
-     *             ? PlatformBundle<TikTokClient, TikTokAccount, TikTokBusiness, TikTokCampaign, TikTokReport>
-     *             : ($platform is 'google'|3
-     *                 ? PlatformBundle<GoogleClient, GoogleAccount, GoogleBusiness, GoogleCampaign, GoogleReport>
-     *                 : PlatformBundle))
-     * )
      */
     public function create(string|int $platform, string|array $accessToken, array $options = []): PlatformBundle
     {
         $name = $this->resolvePlatform($platform);
         $creator = self::$creators[$name] ?? null;
         if ($creator === null) {
+            $package = self::$platformPackages[$name] ?? null;
+            if ($package !== null) {
+                throw new InvalidArgumentException("Adv platform \"{$name}\" is not installed. Require {$package}.");
+            }
+
             throw new InvalidArgumentException("Unsupported adv platform: {$platform}");
         }
 
@@ -203,57 +191,47 @@ class AdvFactory
      * Facebook 应用 OAuth（无需已有 user access token）。
      *
      * @param array{api_version?: string} $options
+     * @return \Goletter\Adv\Platforms\Facebook\FacebookAuth
      */
-    public static function facebookAuth(array $options = []): FacebookAuth
+    public static function facebookAuth(array $options = []): object
     {
-        return self::getShared()->makeFacebookAuth($options);
+        $platform = self::platformClass(self::FACEBOOK);
+
+        return $platform::auth(self::getShared()->platformConfig(self::FACEBOOK, $options));
     }
 
     /**
      * TikTok Marketing API OAuth（无需已有 access token）。
      *
      * @param array{base_uri?: string, auth_base_uri?: string} $options
+     * @return \Goletter\Adv\Platforms\TikTok\TikTokAuth
      */
-    public static function tiktokAuth(array $options = []): TikTokAuth
+    public static function tiktokAuth(array $options = []): object
     {
-        return self::getShared()->makeTikTokAuth($options);
+        $platform = self::platformClass(self::TIKTOK);
+
+        return $platform::auth(self::getShared()->platformConfig(self::TIKTOK, $options));
     }
 
     /**
      * Google Ads OAuth2（无需已有 access token）。
+     *
+     * @return \Goletter\Adv\Platforms\Google\GoogleAuth
      */
-    public static function googleAuth(): GoogleAuth
+    public static function googleAuth(): object
     {
-        return self::getShared()->makeGoogleAuth();
+        $platform = self::platformClass(self::GOOGLE);
+
+        return $platform::auth();
     }
 
     /**
-     * @param array{api_version?: string} $options
+     * @param array<string, mixed> $options
+     * @return array<string, mixed>
      */
-    public function makeFacebookAuth(array $options = []): FacebookAuth
+    public function platformConfig(string $platform, array $options = []): array
     {
-        $merged = array_replace_recursive($this->platformOptions(self::FACEBOOK), $options);
-
-        return new FacebookAuth((string) ($merged['api_version'] ?? 'v24.0'));
-    }
-
-    /**
-     * @param array{base_uri?: string, auth_base_uri?: string} $options
-     */
-    public function makeTikTokAuth(array $options = []): TikTokAuth
-    {
-        $merged = array_replace_recursive($this->platformOptions(self::TIKTOK), $options);
-        $baseUri = (string) ($merged['base_uri'] ?? 'https://business-api.tiktok.com');
-
-        return new TikTokAuth(
-            $baseUri,
-            (string) ($merged['auth_base_uri'] ?? $baseUri)
-        );
-    }
-
-    public function makeGoogleAuth(): GoogleAuth
-    {
-        return new GoogleAuth();
+        return array_replace_recursive($this->platformOptions($this->resolvePlatform($platform)), $options);
     }
 
     public static function normalizePlatform(string|int $platform): string
@@ -301,121 +279,26 @@ class AdvFactory
         }
         self::$defaultsBooted = true;
 
-        self::$creators[self::FACEBOOK] = static function (string|array $accessToken, array $options): PlatformBundle {
-            return self::buildFacebook($accessToken, $options);
-        };
-        self::$creators[self::TIKTOK] = static function (string|array $accessToken, array $options): PlatformBundle {
-            return self::buildTikTok($accessToken, $options);
-        };
-        self::$creators[self::GOOGLE] = static function (string|array $accessToken, array $options): PlatformBundle {
-            return self::buildGoogle($accessToken, $options);
-        };
+        foreach (self::$platformClasses as $class) {
+            if (class_exists($class)) {
+                $class::register();
+            }
+        }
     }
 
     /**
-     * @param string|list<string> $accessToken
-     * @return PlatformBundle<FacebookClient, FacebookAccount, FacebookBusiness, FacebookCampaign, FacebookReport>
+     * @return class-string
      */
-    protected static function buildFacebook(string|array $accessToken, array $options): PlatformBundle
+    protected static function platformClass(string $platform): string
     {
-        $client = new FacebookClient(
-            $accessToken,
-            (string) ($options['api_version'] ?? 'v24.0')
-        );
+        self::bootDefaults();
+        $class = self::$platformClasses[$platform] ?? '';
+        if ($class === '' || ! class_exists($class)) {
+            $package = self::$platformPackages[$platform] ?? $platform;
 
-        if (! empty($options['default_headers']) && is_array($options['default_headers'])) {
-            $client->setDefaultHeaders($options['default_headers']);
+            throw new InvalidArgumentException("Adv platform \"{$platform}\" is not installed. Require {$package}.");
         }
 
-        if (! empty($options['rate_limit']) && is_array($options['rate_limit'])) {
-            $client->configureRateLimit($options['rate_limit']);
-        }
-
-        return new PlatformBundle(
-            client: $client,
-            account: new FacebookAccount($client),
-            business: new FacebookBusiness($client),
-            campaign: new FacebookCampaign($client),
-            report: new FacebookReport($client),
-            platform: self::FACEBOOK,
-            catalog: new FacebookCatalog($client),
-            pixel: new FacebookPixel($client),
-        );
-    }
-
-    /**
-     * @param string|list<string> $accessToken
-     * @return PlatformBundle<TikTokClient, TikTokAccount, TikTokBusiness, TikTokCampaign, TikTokReport>
-     */
-    protected static function buildTikTok(string|array $accessToken, array $options): PlatformBundle
-    {
-        $client = new TikTokClient(
-            $accessToken,
-            (string) ($options['base_uri'] ?? 'https://business-api.tiktok.com')
-        );
-
-        if (! empty($options['default_headers']) && is_array($options['default_headers'])) {
-            $client->setDefaultHeaders($options['default_headers']);
-        }
-
-        return new PlatformBundle(
-            client: $client,
-            account: new TikTokAccount($client),
-            business: new TikTokBusiness($client),
-            campaign: new TikTokCampaign($client),
-            report: new TikTokReport($client),
-            platform: self::TIKTOK,
-        );
-    }
-
-    /**
-     * @param string|list<string> $accessToken
-     * @return PlatformBundle<GoogleClient, GoogleAccount, GoogleBusiness, GoogleCampaign, GoogleReport>
-     */
-    protected static function buildGoogle(string|array $accessToken, array $options): PlatformBundle
-    {
-        $developerToken = (string) (
-            $options['developer_token']
-            ?? self::env('GOOGLE_ADS_DEVELOPER_TOKEN', '')
-        );
-        $loginCustomerId = (string) (
-            $options['login_customer_id']
-            ?? self::env('GOOGLE_ADS_LOGIN_CUSTOMER_ID', '')
-        );
-
-        $client = new GoogleClient(
-            accessToken: $accessToken,
-            developerToken: $developerToken,
-            loginCustomerId: $loginCustomerId,
-            apiVersion: (string) ($options['api_version'] ?? 'v19'),
-            baseUri: (string) ($options['base_uri'] ?? 'https://googleads.googleapis.com')
-        );
-
-        if (! empty($options['default_headers']) && is_array($options['default_headers'])) {
-            $client->setDefaultHeaders($options['default_headers']);
-        }
-
-        return new PlatformBundle(
-            client: $client,
-            account: new GoogleAccount($client),
-            business: new GoogleBusiness($client),
-            campaign: new GoogleCampaign($client),
-            report: new GoogleReport($client),
-            platform: self::GOOGLE,
-        );
-    }
-
-    protected static function env(string $key, string $default = ''): string
-    {
-        if (function_exists('Hyperf\\Support\\env')) {
-            return (string) \Hyperf\Support\env($key, $default);
-        }
-
-        $value = getenv($key);
-        if ($value === false) {
-            return (string) ($_ENV[$key] ?? $default);
-        }
-
-        return (string) $value;
+        return $class;
     }
 }

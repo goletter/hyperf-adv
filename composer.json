@@ -1,6 +1,6 @@
 {
     "name": "goletter/hyperf-adv",
-    "description": "多平台广告 API SDK，支持 Facebook、TikTok、Google Ads",
+    "description": "多平台广告 API SDK。安装本包会拉取 Facebook、TikTok、Google 平台包。",
     "type": "library",
     "license": "MIT",
     "authors": [
@@ -23,7 +23,9 @@
     },
     "require": {
         "php": ">=8.1",
-        "guzzlehttp/guzzle": "^7.0"
+        "goletter/hyperf-adv-facebook": "^1.0",
+        "goletter/hyperf-adv-tiktok": "^1.0",
+        "goletter/hyperf-adv-google": "^1.0"
     },
     "suggest": {
         "hyperf/framework": "Required to use ConfigProvider in Hyperf applications."
