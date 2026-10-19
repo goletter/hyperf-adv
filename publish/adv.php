@@ -48,4 +48,9 @@ return [
         // 'redirect_uri' => env('GOOGLE_ADS_REDIRECT_URI', ''),
         // 'scopes' => ['https://www.googleapis.com/auth/adwords'],
     ],
+
+    'akm' => [
+        'base_uri' => env('AKM_BASE_URL', env('CKM_BASE_URL', 'https://akms-openapi.bluemediagroup.cn')),
+        'timeout' => 10,
+    ],
 ];

@@ -13,6 +13,7 @@ use InvalidArgumentException;
  *   goletter/hyperf-adv-facebook
  *   goletter/hyperf-adv-tiktok
  *   goletter/hyperf-adv-google
+ *   goletter/hyperf-adv-akm
  *
  * 静态用法（兼容）：
  *   AdvFactory::make('facebook', $token)
@@ -31,12 +32,14 @@ class AdvFactory
     public const FACEBOOK = 'facebook';
     public const TIKTOK = 'tiktok';
     public const GOOGLE = 'google';
+    public const AKM = 'akm';
 
     /** @var array<string, string> */
     protected static array $platformPackages = [
         self::FACEBOOK => 'goletter/hyperf-adv-facebook',
         self::TIKTOK => 'goletter/hyperf-adv-tiktok',
         self::GOOGLE => 'goletter/hyperf-adv-google',
+        self::AKM => 'goletter/hyperf-adv-akm',
     ];
 
     /** @var array<string, class-string> */
@@ -44,6 +47,7 @@ class AdvFactory
         self::FACEBOOK => 'Goletter\\Adv\\Platforms\\Facebook\\FacebookPlatform',
         self::TIKTOK => 'Goletter\\Adv\\Platforms\\TikTok\\TikTokPlatform',
         self::GOOGLE => 'Goletter\\Adv\\Platforms\\Google\\GooglePlatform',
+        self::AKM => 'Goletter\\Adv\\Platforms\\Akm\\AkmPlatform',
     ];
 
     /** @var array<int|string, string> */
@@ -164,6 +168,16 @@ class AdvFactory
     }
 
     /**
+     * @param string|list<string> $accessToken
+     * @param array<string, mixed> $options
+     * @return PlatformBundle<\Goletter\Adv\Platforms\Akm\AkmClient, \Goletter\Adv\Platforms\Akm\ApplicationApi, \Goletter\Adv\Platforms\Akm\OpenAccountApi, \Goletter\Adv\Platforms\Akm\ApplicationApi, \Goletter\Adv\Platforms\Akm\DashboardApi>
+     */
+    public static function akm(string|array $accessToken, array $options = []): PlatformBundle
+    {
+        return self::make(self::AKM, $accessToken, $options);
+    }
+
+    /**
      * 实例方法：合并 config/autoload/adv.php 后创建 Bundle。
      *
      * @param string|list<string> $accessToken
@@ -255,7 +269,7 @@ class AdvFactory
             return strtolower((string) $this->aliases[$name]);
         }
 
-        if (isset(self::$creators[$name]) || in_array($name, [self::FACEBOOK, self::TIKTOK, self::GOOGLE], true)) {
+        if (isset(self::$creators[$name]) || in_array($name, [self::FACEBOOK, self::TIKTOK, self::GOOGLE, self::AKM], true)) {
             return $name;
         }
 

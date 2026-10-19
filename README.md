@@ -1,6 +1,6 @@
 # ADV SDK
 
-多平台广告 API。安装 `goletter/hyperf-adv` 会拉取 Facebook、TikTok、Google 三个平台包。工厂、Bundle、Access Token 轮询和异常留在本包，平台包直接使用。
+多平台广告 API。安装 `goletter/hyperf-adv` 会拉取 Facebook、TikTok、Google、AKM 平台包。工厂、Bundle、Access Token 轮询和异常留在本包，平台包直接使用。
 
 ## 安装
 
@@ -13,6 +13,7 @@ composer require goletter/hyperf-adv
 - `goletter/hyperf-adv-facebook`
 - `goletter/hyperf-adv-tiktok`
 - `goletter/hyperf-adv-google`
+- `goletter/hyperf-adv-akm`
 
 各平台的调用写在对应扩展包的 README。
 
