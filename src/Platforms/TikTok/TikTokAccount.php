@@ -20,7 +20,7 @@ class TikTokAccount
     {
         $response = $this->client->get('/open_api/v1.3/advertiser/info/', [
             'advertiser_ids' => json_encode([$advertiserId]),
-        ]);
+        ], 'GET:/advertiser/info/');
 
         return $response['data']['list'][0] ?? [];
     }
@@ -36,7 +36,7 @@ class TikTokAccount
 
         $response = $this->client->get('/open_api/v1.3/advertiser/info/', [
             'advertiser_ids' => json_encode(array_values($advertiserIds)),
-        ]);
+        ], 'GET:/advertiser/info/');
 
         return $response['data']['list'] ?? [];
     }
@@ -48,7 +48,7 @@ class TikTokAccount
     {
         return $this->client->get('/open_api/v1.3/campaign/get/', [
             'advertiser_id' => $advertiserId,
-        ]);
+        ], 'GET:/campaign/get/');
     }
 
     /**
@@ -56,7 +56,7 @@ class TikTokAccount
      */
     public function updateCampaignStatus(array $params): array
     {
-        return $this->client->post('/open_api/v1.3/campaign/status/update/', $params);
+        return $this->client->post('/open_api/v1.3/campaign/status/update/', $params, [], 'POST:/campaign/status/update/');
     }
 
     /**
@@ -67,16 +67,16 @@ class TikTokAccount
         return $this->client->post('/open_api/v1.3/advertiser/update/', [
             'advertiser_id' => $accountId,
             'name' => $name,
-        ]);
+        ], [], 'POST:/advertiser/update/');
     }
 
     public function getTransaction(array $params): array
     {
-        return $this->client->get('/open_api/v1.3/bc/get/', $params);
+        return $this->client->get('/open_api/v1.3/bc/get/', $params, 'GET:/bc/get/');
     }
 
     public function getAdvertiserBalance(array $params): array
     {
-        return $this->client->get('/open_api/v1.3/advertiser/balance/get/', $params);
+        return $this->client->get('/open_api/v1.3/advertiser/balance/get/', $params, 'GET:/advertiser/balance/get/');
     }
 }

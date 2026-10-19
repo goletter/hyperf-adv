@@ -21,7 +21,13 @@ class GoogleCampaign
         $query = 'SELECT campaign.id, campaign.name, campaign.status, campaign.resource_name '
             . 'FROM campaign ORDER BY campaign.id LIMIT ' . max(1, $limit);
 
-        return iterator_to_array($this->client->iterateSearch($customerId, $query));
+        return iterator_to_array($this->client->iterateSearch(
+            $customerId,
+            $query,
+            10000,
+            1000000,
+            'POST:/customers/{customer_id}/googleAds:search',
+        ));
     }
 
     /**
@@ -31,7 +37,13 @@ class GoogleCampaign
     {
         $query = 'SELECT campaign.id, campaign.name, campaign.status, campaign.resource_name FROM campaign';
 
-        yield from $this->client->iterateSearch($customerId, $query);
+        yield from $this->client->iterateSearch(
+            $customerId,
+            $query,
+            10000,
+            1000000,
+            'POST:/customers/{customer_id}/googleAds:search',
+        );
     }
 
     /**
@@ -53,7 +65,9 @@ class GoogleCampaign
                         ],
                     ],
                 ],
-            ]
+            ],
+            [],
+            'POST:/customers/{customer_id}/campaigns:mutate',
         );
     }
 }

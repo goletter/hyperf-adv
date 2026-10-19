@@ -9,6 +9,7 @@ use Goletter\Adv\Platforms\TikTok\Exceptions\TikTokApiException;
 use Goletter\Adv\Platforms\TikTok\Exceptions\TikTokTokenExpiredException;
 use Goletter\Adv\Support\RotatesAccessTokens;
 use GuzzleHttp\Exception\RequestException;
+use function Goletter\Utils\logging;
 
 class TikTokClient
 {
@@ -18,6 +19,13 @@ class TikTokClient
     protected string $baseUri;
 
     protected array $defaultHeaders = [];
+
+    /**
+     * 接口调用日志回调。
+     *
+     * @var null|callable(array $log): void
+     */
+    protected static $callLogHandler = null;
 
     /**
      * @param string|list<string> $accessToken 单个或多个 token；失败时按顺序轮询下一个
@@ -42,19 +50,27 @@ class TikTokClient
         return $this;
     }
 
-    public function get(string $uri, array $query = []): array
+    /**
+     * @param null|callable(array $log): void $handler
+     */
+    public static function setCallLogHandler(?callable $handler): void
     {
-        return $this->request('GET', $uri, $query);
+        self::$callLogHandler = $handler;
     }
 
-    public function post(string $uri, array $body = [], array $query = []): array
+    public function get(string $uri, array $query = [], string $api_interface = ''): array
     {
-        return $this->request('POST', $uri, $query, $body);
+        return $this->request('GET', $uri, $query, [], $api_interface);
     }
 
-    public function delete(string $uri, array $query = []): array
+    public function post(string $uri, array $body = [], array $query = [], string $api_interface = ''): array
     {
-        return $this->request('DELETE', $uri, $query);
+        return $this->request('POST', $uri, $query, $body, $api_interface);
+    }
+
+    public function delete(string $uri, array $query = [], string $api_interface = ''): array
+    {
+        return $this->request('DELETE', $uri, $query, [], $api_interface);
     }
 
     /**
@@ -100,9 +116,10 @@ class TikTokClient
         string $method,
         string $uri,
         array $query = [],
-        array $body = []
+        array $body = [],
+        string $api_interface = '',
     ): array {
-        return $this->withTokenFailover(function () use ($method, $uri, $query, $body): array {
+        return $this->withTokenFailover(function () use ($method, $uri, $query, $body, $api_interface): array {
             try {
                 $options = [
                     'query' => $query,
@@ -128,18 +145,23 @@ class TikTokClient
                 $data = json_decode((string) $response->getBody(), true);
 
                 $this->handleErrorIfNeeded($data);
+                $this->pushCallLog($method, $uri, $api_interface, true, '', $this->accessToken);
 
                 return $data;
             } catch (TikTokApiException $e) {
+                $this->pushCallLog($method, $uri, $api_interface, false, $e->getMessage(), $this->accessToken);
                 throw $e;
             } catch (RequestException $e) {
                 $response = $e->getResponse();
                 if ($response === null) {
+                    $this->pushCallLog($method, $uri, $api_interface, false, $e->getMessage(), $this->accessToken);
                     throw new TikTokApiException($e->getMessage(), (int) $e->getCode(), [], $e);
                 }
 
                 $decoded = json_decode((string) $response->getBody(), true) ?: [];
                 $payload = [...$decoded, 'token' => $this->accessToken];
+                $message = (string) ($decoded['message'] ?? $e->getMessage());
+                $this->pushCallLog($method, $uri, $api_interface, false, $message, $this->accessToken);
 
                 throw new TikTokApiException(
                     json_encode($payload, JSON_UNESCAPED_UNICODE) ?: $e->getMessage(),
@@ -149,6 +171,47 @@ class TikTokClient
                 );
             }
         });
+    }
+
+    protected function pushCallLog(
+        string $method,
+        string $uri,
+        string $apiInterface,
+        bool $success,
+        string $error = '',
+        string $token = '',
+    ): void {
+        if (! is_callable(self::$callLogHandler)) {
+            return;
+        }
+
+        $interface = $apiInterface !== ''
+            ? $apiInterface
+            : (strtoupper($method) . ':' . (preg_replace('#^/open_api/v\d+(?:\.\d+)?#', '', $uri) ?: $uri));
+
+        if ($error || ! $success) {
+            $this->safeLog(
+                ['message' => $error, 'url' => $uri, 'success' => $success, 'token' => $token],
+                '接口日志',
+                'call_logs'
+            );
+        }
+
+        (self::$callLogHandler)([
+            'token' => $token,
+            'api_interface' => $interface,
+            'is_success' => $success ? 1 : 0,
+            'error' => $error,
+            'call_hour' => date('Y-m-d H:00:00'),
+            'created_at' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    protected function safeLog(mixed $data, string $message = '', string $channel = ''): void
+    {
+        if (function_exists('logging')) {
+            logging($data, $message, $channel);
+        }
     }
 
     protected function handleErrorIfNeeded(?array $data): void

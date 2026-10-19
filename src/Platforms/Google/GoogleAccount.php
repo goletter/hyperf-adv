@@ -20,7 +20,11 @@ class GoogleAccount
      */
     public function listAccessibleCustomers(): array
     {
-        $response = $this->client->get("/{$this->client->getApiVersion()}/customers:listAccessibleCustomers");
+        $response = $this->client->get(
+            "/{$this->client->getApiVersion()}/customers:listAccessibleCustomers",
+            [],
+            'GET:/customers:listAccessibleCustomers',
+        );
 
         return $response['resourceNames'] ?? [];
     }
@@ -42,7 +46,11 @@ class GoogleAccount
     {
         $customerId = GoogleClient::normalizeCustomerId($customerId);
 
-        return $this->client->get("/{$this->client->getApiVersion()}/customers/{$customerId}");
+        return $this->client->get(
+            "/{$this->client->getApiVersion()}/customers/{$customerId}",
+            [],
+            'GET:/customers/{customer_id}',
+        );
     }
 
     /**
@@ -51,7 +59,7 @@ class GoogleAccount
     public function searchAll(string $customerId, string $query, int $pageSize = 10000): array
     {
         return iterator_to_array(
-            $this->client->iterateSearch($customerId, $query, $pageSize)
+            $this->client->iterateSearch($customerId, $query, $pageSize, 1000000, 'POST:/customers/{customer_id}/googleAds:search')
         );
     }
 
@@ -67,7 +75,9 @@ class GoogleAccount
             [
                 'descriptiveName' => $name,
                 'updateMask' => 'descriptive_name',
-            ]
+            ],
+            [],
+            'PATCH:/customers/{customer_id}',
         );
     }
 
@@ -83,7 +93,13 @@ class GoogleAccount
             $date
         );
 
-        $rows = $this->client->iterateSearch($customerId, $query);
+        $rows = $this->client->iterateSearch(
+            $customerId,
+            $query,
+            10000,
+            1000000,
+            'POST:/customers/{customer_id}/googleAds:search',
+        );
 
         foreach ($rows as $row) {
             return $row;

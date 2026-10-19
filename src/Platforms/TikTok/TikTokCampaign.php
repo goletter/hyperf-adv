@@ -28,7 +28,7 @@ class TikTokCampaign
             'page_size' => $pageSize,
         ], $filters);
 
-        $response = $this->client->post('/open_api/v1.3/campaign/get/', $body);
+        $response = $this->client->post('/open_api/v1.3/campaign/get/', $body, [], 'POST:/campaign/get/');
 
         return $response['data']['list'] ?? [];
     }
@@ -52,7 +52,7 @@ class TikTokCampaign
                     'page_size' => $size,
                 ], $filters);
 
-                return $this->client->post('/open_api/v1.3/campaign/get/', $body);
+                return $this->client->post('/open_api/v1.3/campaign/get/', $body, [], 'POST:/campaign/get/');
             },
             $pageSize,
             $max

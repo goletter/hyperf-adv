@@ -180,6 +180,11 @@ $client = new GoogleClient(
     loginCustomerId: '1234567890', // 可选，MCC ID
 );
 
+// $api_interface 写入调用日志；不传时按 METHOD + 路径生成，客户 ID 记为 {customer_id}
+GoogleClient::setCallLogHandler(function (array $log): void {
+    // $log['api_interface']、$log['is_success']、$log['error']、$log['token']
+});
+
 $account = new GoogleAccount($client);
 
 // 可访问的客户账户
@@ -1234,10 +1239,13 @@ $client->setDefaultHeaders([
     'requestSource' => 4,
 ]);
 
-// 示例：调用 TikTok 接口
+// 示例：调用 TikTok 接口。$api_interface 写入调用日志，不传则按 METHOD + 去掉版本后的路径生成
+TikTokClient::setCallLogHandler(function (array $log): void {
+    // $log['api_interface']、$log['is_success']、$log['error']、$log['token']
+});
 $result = $client->get('/open_api/v1.3/advertiser/info/', [
     'advertiser_id' => 'YOUR_ADVERTISER_ID',
-]);
+], 'GET:/advertiser/info/');
 ```
 
 ### 报表查询 (TikTokReport)

@@ -9,6 +9,7 @@ use Goletter\Adv\Platforms\Google\Exceptions\GoogleApiException;
 use Goletter\Adv\Platforms\Google\Exceptions\GoogleTokenExpiredException;
 use Goletter\Adv\Support\RotatesAccessTokens;
 use GuzzleHttp\Exception\RequestException;
+use function Goletter\Utils\logging;
 
 /**
  * Google Ads API REST 客户端
@@ -28,6 +29,13 @@ class GoogleClient
     protected string $loginCustomerId;
 
     protected string $apiVersion;
+
+    /**
+     * 接口调用日志回调。
+     *
+     * @var null|callable(array $log): void
+     */
+    protected static $callLogHandler = null;
 
     /**
      * @param string|list<string> $accessToken 单个或多个 OAuth token；失败时按顺序轮询下一个
@@ -83,26 +91,39 @@ class GoogleClient
         return str_replace('-', '', $customerId);
     }
 
-    public function get(string $uri, array $query = []): array
+    /**
+     * @param null|callable(array $log): void $handler
+     */
+    public static function setCallLogHandler(?callable $handler): void
     {
-        return $this->request('GET', $uri, $query);
+        self::$callLogHandler = $handler;
     }
 
-    public function post(string $uri, array $body = [], array $query = []): array
+    public function get(string $uri, array $query = [], string $api_interface = ''): array
     {
-        return $this->request('POST', $uri, $query, $body);
+        return $this->request('GET', $uri, $query, [], $api_interface);
     }
 
-    public function patch(string $uri, array $body = [], array $query = []): array
+    public function post(string $uri, array $body = [], array $query = [], string $api_interface = ''): array
     {
-        return $this->request('PATCH', $uri, $query, $body);
+        return $this->request('POST', $uri, $query, $body, $api_interface);
+    }
+
+    public function patch(string $uri, array $body = [], array $query = [], string $api_interface = ''): array
+    {
+        return $this->request('PATCH', $uri, $query, $body, $api_interface);
     }
 
     /**
      * GAQL 查询（单页）
      */
-    public function search(string $customerId, string $query, ?string $pageToken = null, int $pageSize = 10000): array
-    {
+    public function search(
+        string $customerId,
+        string $query,
+        ?string $pageToken = null,
+        int $pageSize = 10000,
+        string $api_interface = '',
+    ): array {
         $customerId = self::normalizeCustomerId($customerId);
         $body = [
             'query' => $query,
@@ -112,7 +133,12 @@ class GoogleClient
             $body['pageToken'] = $pageToken;
         }
 
-        return $this->post("/{$this->apiVersion}/customers/{$customerId}/googleAds:search", $body);
+        return $this->post(
+            "/{$this->apiVersion}/customers/{$customerId}/googleAds:search",
+            $body,
+            [],
+            $api_interface !== '' ? $api_interface : 'POST:/customers/{customer_id}/googleAds:search',
+        );
     }
 
     /**
@@ -124,13 +150,14 @@ class GoogleClient
         string $customerId,
         string $query,
         int $pageSize = 10000,
-        int $maxRows = 1000000
+        int $maxRows = 1000000,
+        string $api_interface = '',
     ): \Generator {
         $pageToken = null;
         $count = 0;
 
         do {
-            $response = $this->search($customerId, $query, $pageToken, $pageSize);
+            $response = $this->search($customerId, $query, $pageToken, $pageSize, $api_interface);
             foreach ($response['results'] ?? [] as $row) {
                 yield $row;
                 if (++$count >= $maxRows) {
@@ -145,13 +172,14 @@ class GoogleClient
         string $method,
         string $uri,
         array $query = [],
-        array $body = []
+        array $body = [],
+        string $api_interface = '',
     ): array {
         if ($this->developerToken === '') {
             throw new GoogleApiException('Google Ads API 需要配置 developer-token', 0, []);
         }
 
-        return $this->withTokenFailover(function () use ($method, $uri, $query, $body): array {
+        return $this->withTokenFailover(function () use ($method, $uri, $query, $body, $api_interface): array {
             try {
                 $headers = array_merge([
                     'Authorization' => 'Bearer ' . $this->accessToken,
@@ -192,17 +220,23 @@ class GoogleClient
                     $this->handleApiError($data['error'], $data);
                 }
 
+                $this->pushCallLog($method, $uri, $api_interface, true, '', $this->accessToken);
+
                 return $data;
             } catch (GoogleApiException $e) {
+                $this->pushCallLog($method, $uri, $api_interface, false, $e->getMessage(), $this->accessToken);
                 throw $e;
             } catch (RequestException $e) {
                 $response = $e->getResponse();
                 if ($response === null) {
+                    $this->pushCallLog($method, $uri, $api_interface, false, $e->getMessage(), $this->accessToken);
                     throw new GoogleApiException($e->getMessage(), (int) $e->getCode(), [], $e);
                 }
 
                 $bodyContents = (string) $response->getBody();
                 $decoded = json_decode($bodyContents, true) ?: [];
+                $message = (string) ($decoded['error']['message'] ?? ($bodyContents !== '' ? $bodyContents : $e->getMessage()));
+                $this->pushCallLog($method, $uri, $api_interface, false, $message, $this->accessToken);
 
                 throw new GoogleApiException(
                     $bodyContents !== '' ? $bodyContents : $e->getMessage(),
@@ -212,6 +246,49 @@ class GoogleClient
                 );
             }
         });
+    }
+
+    protected function pushCallLog(
+        string $method,
+        string $uri,
+        string $apiInterface,
+        bool $success,
+        string $error = '',
+        string $token = '',
+    ): void {
+        if (! is_callable(self::$callLogHandler)) {
+            return;
+        }
+
+        if ($apiInterface === '') {
+            $path = preg_replace('#^/v\d+#', '', $uri) ?: $uri;
+            $path = preg_replace('#(?<=/customers/)[^/:]+#', '{customer_id}', $path) ?: $path;
+            $apiInterface = strtoupper($method) . ':' . $path;
+        }
+
+        if ($error || ! $success) {
+            $this->safeLog(
+                ['message' => $error, 'url' => $uri, 'success' => $success, 'token' => $token],
+                '接口日志',
+                'call_logs'
+            );
+        }
+
+        (self::$callLogHandler)([
+            'token' => $token,
+            'api_interface' => $apiInterface,
+            'is_success' => $success ? 1 : 0,
+            'error' => $error,
+            'call_hour' => date('Y-m-d H:00:00'),
+            'created_at' => date('Y-m-d H:i:s'),
+        ]);
+    }
+
+    protected function safeLog(mixed $data, string $message = '', string $channel = ''): void
+    {
+        if (function_exists('logging')) {
+            logging($data, $message, $channel);
+        }
     }
 
     protected function handleHttpError(int $status, array $data): void

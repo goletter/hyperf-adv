@@ -43,7 +43,13 @@ class GoogleReport
             $end
         );
 
-        yield from $this->client->iterateSearch($customerId, $query);
+        yield from $this->client->iterateSearch(
+            $customerId,
+            $query,
+            10000,
+            1000000,
+            'POST:/customers/{customer_id}/googleAds:search',
+        );
     }
 
     /**
@@ -65,6 +71,12 @@ class GoogleReport
      */
     public function iterateReport(string $customerId, string $query): \Generator
     {
-        yield from $this->client->iterateSearch($customerId, $query);
+        yield from $this->client->iterateSearch(
+            $customerId,
+            $query,
+            10000,
+            1000000,
+            'POST:/customers/{customer_id}/googleAds:search',
+        );
     }
 }

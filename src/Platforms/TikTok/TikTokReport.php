@@ -40,7 +40,7 @@ class TikTokReport
                 'end_date' => $end,
                 'page' => $page,
                 'page_size' => $size,
-            ]),
+            ], 'GET:/report/integrated/get/'),
             $pageSize,
             $max
         );

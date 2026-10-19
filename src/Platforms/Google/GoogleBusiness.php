@@ -35,7 +35,13 @@ class GoogleBusiness
             . 'customer_client.currency_code, customer_client.status '
             . "FROM customer_client WHERE {$where}";
 
-        yield from $this->client->iterateSearch($managerCustomerId, $query);
+        yield from $this->client->iterateSearch(
+            $managerCustomerId,
+            $query,
+            10000,
+            1000000,
+            'POST:/customers/{customer_id}/googleAds:search',
+        );
     }
 
     /**

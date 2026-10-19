@@ -21,7 +21,7 @@ class TikTokBusiness
         $response = $this->client->get('/open_api/v1.3/business/get/', [
             'page' => $page,
             'page_size' => $pageSize,
-        ]);
+        ], 'GET:/business/get/');
 
         return $response['data']['list'] ?? [];
     }
@@ -37,7 +37,7 @@ class TikTokBusiness
             fn (int $page, int $size) => $this->client->get('/open_api/v1.3/business/get/', [
                 'page' => $page,
                 'page_size' => $size,
-            ]),
+            ], 'GET:/business/get/'),
             $pageSize,
             $max
         );
@@ -55,7 +55,7 @@ class TikTokBusiness
             'business_center_id' => $businessCenterId,
             'page' => $page,
             'page_size' => $pageSize,
-        ]);
+        ], 'GET:/business/advertiser/get/');
 
         return $response['data']['list'] ?? [];
     }
@@ -75,7 +75,7 @@ class TikTokBusiness
                 'business_center_id' => $businessCenterId,
                 'page' => $page,
                 'page_size' => $size,
-            ]),
+            ], 'GET:/business/advertiser/get/'),
             $pageSize,
             $max
         );
@@ -89,7 +89,7 @@ class TikTokBusiness
         $response = $this->client->get('/open_api/v1.3/bc/asset/get/', [
             'bc_id' => $bcId,
             'asset_type' => $assetType,
-        ]);
+        ], 'GET:/bc/asset/get/');
 
         return $response['data']['list'] ?? $response['data'] ?? $response;
     }
@@ -101,7 +101,7 @@ class TikTokBusiness
      */
     public function assignBcAsset(array $payload): array
     {
-        $response = $this->client->post('/open_api/v1.3/bc/asset/assign/', $payload);
+        $response = $this->client->post('/open_api/v1.3/bc/asset/assign/', $payload, [], 'POST:/bc/asset/assign/');
 
         return $response['data'] ?? $response;
     }
@@ -111,7 +111,7 @@ class TikTokBusiness
      */
     public function getBcs(): array
     {
-        $response = $this->client->get('/open_api/v1.3/bc/asset/get/');
+        $response = $this->client->get('/open_api/v1.3/bc/asset/get/', [], 'GET:/bc/asset/get/');
 
         return $response['data'] ?? $response;
     }
