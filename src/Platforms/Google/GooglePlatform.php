@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Goletter\Adv\Platforms\Google;
 
 use Goletter\Adv\AdvFactory;
-use Goletter\Adv\PlatformBundle;
 
 /**
  * 把 Google Ads 注册到 AdvFactory。
@@ -21,7 +20,7 @@ class GooglePlatform
      * @param string|list<string> $accessToken
      * @param array<string, mixed> $options
      */
-    public static function create(string|array $accessToken, array $options): PlatformBundle
+    public static function create(string|array $accessToken, array $options): GoogleBundle
     {
         $developerToken = (string) (
             $options['developer_token']
@@ -44,7 +43,7 @@ class GooglePlatform
             $client->setDefaultHeaders($options['default_headers']);
         }
 
-        return new PlatformBundle(
+        return new GoogleBundle(
             client: $client,
             account: new GoogleAccount($client),
             business: new GoogleBusiness($client),

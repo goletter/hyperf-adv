@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Goletter\Adv\Platforms\Facebook;
 
 use Goletter\Adv\AdvFactory;
-use Goletter\Adv\PlatformBundle;
 
 /**
  * 把 Facebook 注册到 AdvFactory。
@@ -21,7 +20,7 @@ class FacebookPlatform
      * @param string|list<string> $accessToken
      * @param array<string, mixed> $options
      */
-    public static function create(string|array $accessToken, array $options): PlatformBundle
+    public static function create(string|array $accessToken, array $options): FacebookBundle
     {
         $client = new FacebookClient(
             $accessToken,
@@ -36,7 +35,7 @@ class FacebookPlatform
             $client->configureRateLimit($options['rate_limit']);
         }
 
-        return new PlatformBundle(
+        return new FacebookBundle(
             client: $client,
             account: new FacebookAccount($client),
             business: new FacebookBusiness($client),

@@ -5,8 +5,11 @@ declare(strict_types=1);
 namespace Goletter\Adv;
 
 use Goletter\Adv\Platforms\Facebook\FacebookAuth;
+use Goletter\Adv\Platforms\Facebook\FacebookBundle;
 use Goletter\Adv\Platforms\Google\GoogleAuth;
+use Goletter\Adv\Platforms\Google\GoogleBundle;
 use Goletter\Adv\Platforms\TikTok\TikTokAuth;
+use Goletter\Adv\Platforms\TikTok\TikTokBundle;
 use InvalidArgumentException;
 
 /**
@@ -140,7 +143,7 @@ class AdvFactory
      *     rate_limit?: array
      * } $options
      */
-    public static function make(string|int $platform, string|array $accessToken, array $options = []): PlatformBundle
+    public static function make(string|int $platform, string|array $accessToken, array $options = []): PlatformBundle|FacebookBundle|TikTokBundle|GoogleBundle
     {
         return self::getShared()->create($platform, $accessToken, $options);
     }
@@ -148,31 +151,43 @@ class AdvFactory
     /**
      * @param string|list<string> $accessToken
      * @param array<string, mixed> $options
-     * @return PlatformBundle<\Goletter\Adv\Platforms\Facebook\FacebookClient, \Goletter\Adv\Platforms\Facebook\FacebookAccount, \Goletter\Adv\Platforms\Facebook\FacebookBusiness, \Goletter\Adv\Platforms\Facebook\FacebookCampaign, \Goletter\Adv\Platforms\Facebook\FacebookReport>
      */
-    public static function facebook(string|array $accessToken, array $options = []): PlatformBundle
+    public static function facebook(string|array $accessToken, array $options = []): FacebookBundle
     {
-        return self::make(self::FACEBOOK, $accessToken, $options);
+        $bundle = self::make(self::FACEBOOK, $accessToken, $options);
+        if (! $bundle instanceof FacebookBundle) {
+            throw new InvalidArgumentException('Facebook platform is not available.');
+        }
+
+        return $bundle;
     }
 
     /**
      * @param string|list<string> $accessToken
      * @param array<string, mixed> $options
-     * @return PlatformBundle<\Goletter\Adv\Platforms\TikTok\TikTokClient, \Goletter\Adv\Platforms\TikTok\TikTokAccount, \Goletter\Adv\Platforms\TikTok\TikTokBusiness, \Goletter\Adv\Platforms\TikTok\TikTokCampaign, \Goletter\Adv\Platforms\TikTok\TikTokReport>
      */
-    public static function tiktok(string|array $accessToken, array $options = []): PlatformBundle
+    public static function tiktok(string|array $accessToken, array $options = []): TikTokBundle
     {
-        return self::make(self::TIKTOK, $accessToken, $options);
+        $bundle = self::make(self::TIKTOK, $accessToken, $options);
+        if (! $bundle instanceof TikTokBundle) {
+            throw new InvalidArgumentException('TikTok platform is not available.');
+        }
+
+        return $bundle;
     }
 
     /**
      * @param string|list<string> $accessToken
      * @param array<string, mixed> $options
-     * @return PlatformBundle<\Goletter\Adv\Platforms\Google\GoogleClient, \Goletter\Adv\Platforms\Google\GoogleAccount, \Goletter\Adv\Platforms\Google\GoogleBusiness, \Goletter\Adv\Platforms\Google\GoogleCampaign, \Goletter\Adv\Platforms\Google\GoogleReport>
      */
-    public static function google(string|array $accessToken, array $options = []): PlatformBundle
+    public static function google(string|array $accessToken, array $options = []): GoogleBundle
     {
-        return self::make(self::GOOGLE, $accessToken, $options);
+        $bundle = self::make(self::GOOGLE, $accessToken, $options);
+        if (! $bundle instanceof GoogleBundle) {
+            throw new InvalidArgumentException('Google platform is not available.');
+        }
+
+        return $bundle;
     }
 
     /**
@@ -181,7 +196,7 @@ class AdvFactory
      * @param string|list<string> $accessToken
      * @param array<string, mixed> $options
      */
-    public function create(string|int $platform, string|array $accessToken, array $options = []): PlatformBundle
+    public function create(string|int $platform, string|array $accessToken, array $options = []): PlatformBundle|FacebookBundle|TikTokBundle|GoogleBundle
     {
         $name = $this->resolvePlatform($platform);
         $creator = self::$creators[$name] ?? null;

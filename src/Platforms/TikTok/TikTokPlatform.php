@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Goletter\Adv\Platforms\TikTok;
 
 use Goletter\Adv\AdvFactory;
-use Goletter\Adv\PlatformBundle;
 
 /**
  * 把 TikTok 注册到 AdvFactory。
@@ -21,7 +20,7 @@ class TikTokPlatform
      * @param string|list<string> $accessToken
      * @param array<string, mixed> $options
      */
-    public static function create(string|array $accessToken, array $options): PlatformBundle
+    public static function create(string|array $accessToken, array $options): TikTokBundle
     {
         $client = new TikTokClient(
             $accessToken,
@@ -32,7 +31,7 @@ class TikTokPlatform
             $client->setDefaultHeaders($options['default_headers']);
         }
 
-        return new PlatformBundle(
+        return new TikTokBundle(
             client: $client,
             account: new TikTokAccount($client),
             business: new TikTokBusiness($client),
