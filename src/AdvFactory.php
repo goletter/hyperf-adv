@@ -4,16 +4,15 @@ declare(strict_types=1);
 
 namespace Goletter\Adv;
 
+use Goletter\Adv\Platforms\Facebook\FacebookAuth;
+use Goletter\Adv\Platforms\Google\GoogleAuth;
+use Goletter\Adv\Platforms\TikTok\TikTokAuth;
 use InvalidArgumentException;
 
 /**
  * 多平台广告 SDK 工厂。
  *
- * 平台实现在独立扩展包中，并注册到这里：
- *   goletter/hyperf-adv-facebook
- *   goletter/hyperf-adv-tiktok
- *   goletter/hyperf-adv-google
- *   goletter/hyperf-adv-akm
+ * 本包内置 Facebook / TikTok / Google。
  *
  * 静态用法（兼容）：
  *   AdvFactory::make('facebook', $token)
@@ -32,22 +31,12 @@ class AdvFactory
     public const FACEBOOK = 'facebook';
     public const TIKTOK = 'tiktok';
     public const GOOGLE = 'google';
-    public const AKM = 'akm';
-
-    /** @var array<string, string> */
-    protected static array $platformPackages = [
-        self::FACEBOOK => 'goletter/hyperf-adv-facebook',
-        self::TIKTOK => 'goletter/hyperf-adv-tiktok',
-        self::GOOGLE => 'goletter/hyperf-adv-google',
-        self::AKM => 'goletter/hyperf-adv-akm',
-    ];
 
     /** @var array<string, class-string> */
     protected static array $platformClasses = [
         self::FACEBOOK => 'Goletter\\Adv\\Platforms\\Facebook\\FacebookPlatform',
         self::TIKTOK => 'Goletter\\Adv\\Platforms\\TikTok\\TikTokPlatform',
         self::GOOGLE => 'Goletter\\Adv\\Platforms\\Google\\GooglePlatform',
-        self::AKM => 'Goletter\\Adv\\Platforms\\Akm\\AkmPlatform',
     ];
 
     /** @var array<int|string, string> */
@@ -58,6 +47,7 @@ class AdvFactory
         'fb' => self::FACEBOOK,
         'meta' => self::FACEBOOK,
         'tt' => self::TIKTOK,
+        'gads' => self::GOOGLE,
     ];
 
     /**
@@ -108,17 +98,35 @@ class AdvFactory
      */
     public static function register(string $platform, callable $creator): void
     {
-        if (! self::$defaultsBooted) {
-            self::bootDefaults();
-        }
+        self::boot();
         self::$creators[strtolower(trim($platform))] = $creator;
     }
 
     public static function has(string $platform): bool
     {
-        self::bootDefaults();
+        self::boot();
 
         return isset(self::$creators[strtolower(trim($platform))]);
+    }
+
+    /**
+     * 已注册平台名列表（按注册顺序）。
+     *
+     * @return list<string>
+     */
+    public static function platforms(): array
+    {
+        self::boot();
+
+        return array_keys(self::$creators);
+    }
+
+    /**
+     * 显式引导默认平台注册（Hyperf ConfigProvider / 非 DI 场景均可调用）。
+     */
+    public static function boot(): void
+    {
+        self::bootDefaults();
     }
 
     /**
@@ -168,16 +176,6 @@ class AdvFactory
     }
 
     /**
-     * @param string|list<string> $accessToken
-     * @param array<string, mixed> $options
-     * @return PlatformBundle<\Goletter\Adv\Platforms\Akm\AkmClient, \Goletter\Adv\Platforms\Akm\ApplicationApi, \Goletter\Adv\Platforms\Akm\OpenAccountApi, \Goletter\Adv\Platforms\Akm\ApplicationApi, \Goletter\Adv\Platforms\Akm\DashboardApi>
-     */
-    public static function akm(string|array $accessToken, array $options = []): PlatformBundle
-    {
-        return self::make(self::AKM, $accessToken, $options);
-    }
-
-    /**
      * 实例方法：合并 config/autoload/adv.php 后创建 Bundle。
      *
      * @param string|list<string> $accessToken
@@ -188,11 +186,6 @@ class AdvFactory
         $name = $this->resolvePlatform($platform);
         $creator = self::$creators[$name] ?? null;
         if ($creator === null) {
-            $package = self::$platformPackages[$name] ?? null;
-            if ($package !== null) {
-                throw new InvalidArgumentException("Adv platform \"{$name}\" is not installed. Require {$package}.");
-            }
-
             throw new InvalidArgumentException("Unsupported adv platform: {$platform}");
         }
 
@@ -205,9 +198,8 @@ class AdvFactory
      * Facebook 应用 OAuth（无需已有 user access token）。
      *
      * @param array{api_version?: string} $options
-     * @return \Goletter\Adv\Platforms\Facebook\FacebookAuth
      */
-    public static function facebookAuth(array $options = []): object
+    public static function facebookAuth(array $options = []): FacebookAuth
     {
         $platform = self::platformClass(self::FACEBOOK);
 
@@ -218,9 +210,8 @@ class AdvFactory
      * TikTok Marketing API OAuth（无需已有 access token）。
      *
      * @param array{base_uri?: string, auth_base_uri?: string} $options
-     * @return \Goletter\Adv\Platforms\TikTok\TikTokAuth
      */
-    public static function tiktokAuth(array $options = []): object
+    public static function tiktokAuth(array $options = []): TikTokAuth
     {
         $platform = self::platformClass(self::TIKTOK);
 
@@ -230,13 +221,13 @@ class AdvFactory
     /**
      * Google Ads OAuth2（无需已有 access token）。
      *
-     * @return \Goletter\Adv\Platforms\Google\GoogleAuth
+     * @param array<string, mixed> $options 预留与其它平台 Auth 签名一致；当前 GoogleAuth 无构造参数
      */
-    public static function googleAuth(): object
+    public static function googleAuth(array $options = []): GoogleAuth
     {
         $platform = self::platformClass(self::GOOGLE);
 
-        return $platform::auth();
+        return $platform::auth(self::getShared()->platformConfig(self::GOOGLE, $options));
     }
 
     /**
@@ -269,7 +260,7 @@ class AdvFactory
             return strtolower((string) $this->aliases[$name]);
         }
 
-        if (isset(self::$creators[$name]) || in_array($name, [self::FACEBOOK, self::TIKTOK, self::GOOGLE, self::AKM], true)) {
+        if (isset(self::$creators[$name]) || in_array($name, [self::FACEBOOK, self::TIKTOK, self::GOOGLE], true)) {
             return $name;
         }
 
@@ -305,12 +296,10 @@ class AdvFactory
      */
     protected static function platformClass(string $platform): string
     {
-        self::bootDefaults();
+        self::boot();
         $class = self::$platformClasses[$platform] ?? '';
         if ($class === '' || ! class_exists($class)) {
-            $package = self::$platformPackages[$platform] ?? $platform;
-
-            throw new InvalidArgumentException("Adv platform \"{$platform}\" is not installed. Require {$package}.");
+            throw new InvalidArgumentException("Adv platform \"{$platform}\" is not installed.");
         }
 
         return $class;

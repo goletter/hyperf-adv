@@ -5,11 +5,15 @@ declare(strict_types=1);
 use function Hyperf\Support\env;
 
 return [
-    // 平台数字别名：AdvFactory::make(0, $token)
+    // 平台数字 / 字符串别名：AdvFactory::make(0, $token) / make('fb', $token)
     'platforms' => [
         0 => 'facebook',
         1 => 'tiktok',
         3 => 'google',
+        // 'fb' => 'facebook',
+        // 'meta' => 'facebook',
+        // 'tt' => 'tiktok',
+        // 'gads' => 'google',
     ],
 
     'facebook' => [
@@ -47,10 +51,5 @@ return [
         // 'client_secret' => env('GOOGLE_ADS_CLIENT_SECRET', ''),
         // 'redirect_uri' => env('GOOGLE_ADS_REDIRECT_URI', ''),
         // 'scopes' => ['https://www.googleapis.com/auth/adwords'],
-    ],
-
-    'akm' => [
-        'base_uri' => env('AKM_BASE_URL', env('CKM_BASE_URL', 'https://akms-openapi.bluemediagroup.cn')),
-        'timeout' => 10,
-    ],
+    ]
 ];

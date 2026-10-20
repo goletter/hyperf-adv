@@ -7,7 +7,7 @@ namespace Goletter\Adv;
 /**
  * 平台服务集合，便于一次拿到 Client + 业务封装。
  *
- * 具体类型由已安装的平台包决定（hyperf-adv-facebook / tiktok / google）。
+ * 具体类型由平台实现决定（本包内置 Facebook / TikTok / Google）。
  *
  * @template TClient of object
  * @template TAccount of object

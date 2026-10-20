@@ -1,6 +1,23 @@
 # ADV SDK
 
-多平台广告 API。安装 `goletter/hyperf-adv` 会拉取 Facebook、TikTok、Google、AKM 平台包。工厂、Bundle、Access Token 轮询和异常留在本包，平台包直接使用。
+多平台广告 API SDK。
+
+| 平台 | 位置 | 说明 |
+|------|------|------|
+| Facebook | 本包 `Platforms/Facebook` | Marketing / Graph API |
+| TikTok | 本包 `Platforms/TikTok` | Business API |
+| Google | 本包 `Platforms/Google` | Google Ads API |
+
+工厂（`AdvFactory`）、`PlatformBundle`、多 Token 轮询与公共异常均在本包。
+
+## 目录
+
+- [安装](#安装)
+- [快速开始](#快速开始推荐)
+- [Google Ads](#google-ads)
+- [Facebook Marketing API](#facebook-marketing-api)
+- [TikTok Business API](#tiktok-business-api)
+- [特性](#特性)
 
 ## 安装
 
@@ -8,14 +25,7 @@
 composer require goletter/hyperf-adv
 ```
 
-会安装：
-
-- `goletter/hyperf-adv-facebook`
-- `goletter/hyperf-adv-tiktok`
-- `goletter/hyperf-adv-google`
-- `goletter/hyperf-adv-akm`
-
-各平台的调用写在对应扩展包的 README。
+旧包名 `goletter/hyperf-adv-facebook` / `hyperf-adv-tiktok` / `hyperf-adv-google` 已合并进本包（Composer `replace`），无需再单独 require。
 
 Hyperf 项目可发布配置：
 
@@ -129,9 +139,7 @@ try {
 }
 ```
 
-## 使用示例
-
-### Google Ads
+## Google Ads
 
 需要 OAuth2 **Access Token**、**Developer Token**，操作 MCC 下子账户时还需 **Login Customer ID**（经理账户 ID，纯数字）。
 
@@ -237,6 +245,8 @@ $campaign->updateCampaignStatus(
 - `GOOGLE_ADS_DEVELOPER_TOKEN`
 - `GOOGLE_ADS_LOGIN_CUSTOMER_ID`
 - `GOOGLE_ADS_CLIENT_ID` / `GOOGLE_ADS_CLIENT_SECRET` / `GOOGLE_ADS_REDIRECT_URI`（OAuth 授权用）
+
+## Facebook Marketing API
 
 ### 基础 Client
 
@@ -1155,7 +1165,7 @@ try {
 }
 ```
 
-## API 版本
+### API 版本
 
 默认使用 Facebook API v24.0，可在创建 Client 时自定义：
 
@@ -1181,7 +1191,7 @@ foreach ($account->iterateCampaigns('ACCOUNT_ID') as $campaign) {
 }
 ```
 
-## TikTok 使用示例
+## TikTok Business API
 
 ### 应用授权 OAuth (TikTokAuth / portal/auth)
 
@@ -1361,16 +1371,11 @@ try {
 
 ## 特性
 
-- ✅ 流式分页处理（Generator），内存友好
-- ✅ 自动处理 Facebook 分页
-- ✅ 自动去重（基于 ID），避免重复数据
-- ✅ 完整的错误处理和异常类型
-- ✅ 支持自定义请求头
-- ✅ 支持 BM 账户查询
-- ✅ 支持多级别 insights 报告
-- ✅ 灵活的时间范围查询
-- ✅ 完整的广告系列（Campaigns）管理
-- ✅ 支持过滤条件和批量操作
-- ✅ Facebook 应用授权（dialog/oauth + 回调换长期 Token）
-- ✅ TikTok 应用授权（portal/auth + auth_code 换 Token / refresh）
-- ✅ Google Ads 应用授权（OAuth2 authorize + code/refresh 换 Token）
+- 内置 Facebook / TikTok / Google
+- `AdvFactory` 统一创建 Bundle；支持数字 / 字符串别名（`0`、`fb`、`gads` 等）
+- 多 Access Token 轮询（失败切换，成功粘滞）
+- 流式分页（Generator）、Facebook Graph 分页与去重
+- 调用日志：`setCallLogHandler`；可选对接 `goletter/hyperf-utils` 的 `logging()`
+- Facebook：BM / 账户 / Campaign / Catalog / Pixel / Insights；限流重试与 Batch
+- 应用授权：Facebook `dialog/oauth`、TikTok `portal/auth`、Google OAuth2
+- 跨平台 Token 失效：`TokenExpiredExceptionInterface`
