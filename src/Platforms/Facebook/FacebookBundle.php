@@ -14,6 +14,7 @@ class FacebookBundle
         public readonly FacebookAccount $account,
         public readonly FacebookBusiness $business,
         public readonly FacebookCampaign $campaign,
+        public readonly FacebookAd $ad,
         public readonly FacebookReport $report,
         public readonly string $platform,
         public readonly ?FacebookCatalog $catalog = null,

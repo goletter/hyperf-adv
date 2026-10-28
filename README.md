@@ -77,12 +77,13 @@ class AdSyncService
 
 ### 注册自定义平台
 
-`PlatformBundle` 的 client / account / business / campaign / report 须为已支持平台类型（Facebook / TikTok / Google 对应类），以便 IDE 跳转与类型检查。Facebook Bundle 另含 `catalog`、`pixel`（其它平台为 `null`）。自定义平台通常基于现有实现扩展或包装：
+`PlatformBundle` 的 client / account / business / campaign / report 须为已支持平台类型（Facebook / TikTok / Google 对应类），以便 IDE 跳转与类型检查。Facebook Bundle 另含 `ad`、`catalog`、`pixel`。自定义平台通常基于现有实现扩展或包装：
 
 ```php
 use Goletter\Adv\AdvFactory;
-use Goletter\Adv\PlatformBundle;
 use Goletter\Adv\Platforms\Facebook\FacebookAccount;
+use Goletter\Adv\Platforms\Facebook\FacebookAd;
+use Goletter\Adv\Platforms\Facebook\FacebookBundle;
 use Goletter\Adv\Platforms\Facebook\FacebookBusiness;
 use Goletter\Adv\Platforms\Facebook\FacebookCampaign;
 use Goletter\Adv\Platforms\Facebook\FacebookCatalog;
@@ -90,13 +91,14 @@ use Goletter\Adv\Platforms\Facebook\FacebookClient;
 use Goletter\Adv\Platforms\Facebook\FacebookPixel;
 use Goletter\Adv\Platforms\Facebook\FacebookReport;
 
-AdvFactory::register('custom', function (string $accessToken, array $options): PlatformBundle {
+AdvFactory::register('custom', function (string $accessToken, array $options): FacebookBundle {
     $client = new FacebookClient($accessToken);
-    return new PlatformBundle(
+    return new FacebookBundle(
         client: $client,
         account: new FacebookAccount($client),
         business: new FacebookBusiness($client),
         campaign: new FacebookCampaign($client),
+        ad: new FacebookAd($client),
         report: new FacebookReport($client),
         platform: 'custom',
         catalog: new FacebookCatalog($client),
@@ -199,7 +201,7 @@ $client = new GoogleClient(
 
 // $api_interface 写入调用日志；不传时按 METHOD + 路径生成，客户 ID 记为 {customer_id}
 GoogleClient::setCallLogHandler(function (array $log): void {
-    // $log['api_interface']、$log['is_success']、$log['error']、$log['token']
+    // $log['api_interface']、$log['is_success']、$log['error']、$log['token']、$log['duration_ms']
 });
 
 $account = new GoogleAccount($client);
@@ -419,6 +421,14 @@ foreach ($business->iterateBusinessUsers('BUSINESS_ID') as $user) {
 // 获取 Business Manager 下的 Pages
 $pages = $business->listPages('BUSINESS_ID');
 
+// 主页已分配用户 / 分配 / 移除
+$pageUsers = $business->listPageAssignedUsers('PAGE_ID', 'BUSINESS_ID');
+$business->assignPageUser('PAGE_ID', 'SYSTEM_USER_ID', 'BUSINESS_ID', ['ADVERTISE']);
+$business->removePageAssignedUser('PAGE_ID', 'SYSTEM_USER_ID', 'BUSINESS_ID');
+foreach ($business->iteratePageAssignedUsers('PAGE_ID', 'BUSINESS_ID') as $user) {
+    // ...
+}
+
 // 从 Business Manager 移除广告账户
 $result = $business->removeAdAccount('BUSINESS_ID', 'ACCOUNT_ID');
 
@@ -561,6 +571,83 @@ $campaign->archiveCampaign('CAMPAIGN_ID'); // 归档
 
 // 批量更新状态（内部走 Graph Batch，每批最多 50，自动限流重试）
 $results = $campaign->batchUpdateStatus(['CAMPAIGN_ID_1', 'CAMPAIGN_ID_2'], 'PAUSED');
+```
+
+### 广告投放 (FacebookAd)
+
+素材上传、广告组、创意、广告。也可通过 `AdvFactory::facebook($token)->ad` 使用。
+
+典型流程：`Campaign` → `AdSet` → `Creative`（可先 `uploadImage` / `uploadVideo`）→ `Ad`。
+
+```php
+use Goletter\Adv\AdvFactory;
+
+$adv = AdvFactory::facebook('YOUR_ACCESS_TOKEN');
+$ad = $adv->ad;
+
+// 上传图片，直接拿 image_hash
+$hash = $ad->uploadImageHash('ACCOUNT_ID', '/path/to/creative.jpg');
+// 或远程图：$ad->uploadImageHash('ACCOUNT_ID', 'https://example.com/a.jpg');
+
+// 上传视频（本地 multipart / 远程 file_url）
+$video = $ad->uploadVideo('ACCOUNT_ID', '/path/to/creative.mp4');
+$status = $ad->getVideo($video['id']); // status.video_status: processing / ready / error
+
+// 创建广告组
+$adset = $ad->createAdset('ACCOUNT_ID', [
+    'name' => '我的广告组',
+    'campaign_id' => 'CAMPAIGN_ID',
+    'billing_event' => 'IMPRESSIONS',
+    'optimization_goal' => 'LINK_CLICKS',
+    'bid_amount' => 100,
+    'daily_budget' => 5000,
+    'targeting' => [
+        'geo_locations' => ['countries' => ['US']],
+    ],
+    'status' => 'PAUSED',
+]);
+
+// 创建创意（图片示例）
+$creative = $ad->createCreative('ACCOUNT_ID', [
+    'name' => '我的创意',
+    'object_story_spec' => [
+        'page_id' => 'PAGE_ID',
+        'link_data' => [
+            'image_hash' => $hash,
+            'link' => 'https://example.com',
+            'message' => '广告文案',
+            'call_to_action' => ['type' => 'LEARN_MORE'],
+        ],
+    ],
+]);
+
+// 创建广告
+$newAd = $ad->createAd('ACCOUNT_ID', [
+    'name' => '我的广告',
+    'adset_id' => $adset['id'],
+    'creative' => ['creative_id' => $creative['id']],
+    'status' => 'PAUSED',
+]);
+
+// 列表 / 详情 / 流式
+$ads = $ad->listAds('ACCOUNT_ID');
+$adsets = $ad->listAdsets('ACCOUNT_ID', filters: ['status' => ['ACTIVE']]);
+foreach ($ad->iterateAds('ACCOUNT_ID') as $item) {
+    echo $item['name'] . PHP_EOL;
+}
+$detail = $ad->getAd('AD_ID');
+$adsetDetail = $ad->getAdset('ADSET_ID');
+$creativeDetail = $ad->getCreative('CREATIVE_ID');
+
+// 更新与状态
+$ad->updateAd('AD_ID', ['name' => '新名称']);
+$ad->pauseAd('AD_ID');
+$ad->activateAd('AD_ID');
+$ad->deleteAd('AD_ID');
+$ad->archiveAd('AD_ID');
+$ad->pauseAdset('ADSET_ID');
+$ad->batchUpdateAdStatus(['AD_ID_1', 'AD_ID_2'], 'PAUSED');
+$ad->batchUpdateAdsetStatus(['ADSET_ID_1'], 'PAUSED');
 ```
 
 ### 商品目录管理 (FacebookCatalog)
@@ -1260,7 +1347,7 @@ $client->setDefaultHeaders([
 
 // 示例：调用 TikTok 接口。$api_interface 写入调用日志，不传则按 METHOD + 去掉版本后的路径生成
 TikTokClient::setCallLogHandler(function (array $log): void {
-    // $log['api_interface']、$log['is_success']、$log['error']、$log['token']
+    // $log['api_interface']、$log['is_success']、$log['error']、$log['token']、$log['duration_ms']
 });
 $result = $client->get('/open_api/v1.3/advertiser/info/', [
     'advertiser_id' => 'YOUR_ADVERTISER_ID',
@@ -1375,7 +1462,7 @@ try {
 - `AdvFactory` 统一创建 Bundle；支持数字 / 字符串别名（`0`、`fb`、`gads` 等）
 - 多 Access Token 轮询（失败切换，成功粘滞）
 - 流式分页（Generator）、Facebook Graph 分页与去重
-- 调用日志：`setCallLogHandler`；可选对接 `goletter/hyperf-utils` 的 `logging()`
-- Facebook：BM / 账户 / Campaign / Catalog / Pixel / Insights；限流重试与 Batch
+- 调用日志：`setCallLogHandler`（含 `duration_ms` 请求耗时）；可选对接 `goletter/hyperf-utils` 的 `logging()`
+- Facebook：BM / 账户 / Campaign / Ad（素材·广告组·创意·广告）/ Catalog / Pixel / Insights；限流重试与 Batch
 - 应用授权：Facebook `dialog/oauth`、TikTok `portal/auth`、Google OAuth2
 - 跨平台 Token 失效：`TokenExpiredExceptionInterface`

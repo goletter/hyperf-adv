@@ -181,6 +181,8 @@ class GoogleClient
         }
 
         return $this->withTokenFailover(function () use ($method, $uri, $query, $body, $api_interface): array {
+            $startedAt = microtime(true);
+
             try {
                 $headers = array_merge([
                     'Authorization' => 'Bearer ' . $this->accessToken,
@@ -221,23 +223,56 @@ class GoogleClient
                     $this->handleApiError($data['error'], $data);
                 }
 
-                $this->pushCallLog($method, $uri, $api_interface, true, '', $this->accessToken);
+                $this->pushCallLog(
+                    $method,
+                    $uri,
+                    $api_interface,
+                    true,
+                    '',
+                    $this->accessToken,
+                    $this->elapsedMs($startedAt)
+                );
 
                 return $data;
             } catch (GoogleApiException $e) {
-                $this->pushCallLog($method, $uri, $api_interface, false, $e->getMessage(), $this->accessToken);
+                $this->pushCallLog(
+                    $method,
+                    $uri,
+                    $api_interface,
+                    false,
+                    $e->getMessage(),
+                    $this->accessToken,
+                    $this->elapsedMs($startedAt)
+                );
                 throw $e;
             } catch (RequestException $e) {
+                $durationMs = $this->elapsedMs($startedAt);
                 $response = $e->getResponse();
                 if ($response === null) {
-                    $this->pushCallLog($method, $uri, $api_interface, false, $e->getMessage(), $this->accessToken);
+                    $this->pushCallLog(
+                        $method,
+                        $uri,
+                        $api_interface,
+                        false,
+                        $e->getMessage(),
+                        $this->accessToken,
+                        $durationMs
+                    );
                     throw new GoogleApiException($e->getMessage(), (int) $e->getCode(), [], $e);
                 }
 
                 $bodyContents = (string) $response->getBody();
                 $decoded = json_decode($bodyContents, true) ?: [];
                 $message = (string) ($decoded['error']['message'] ?? ($bodyContents !== '' ? $bodyContents : $e->getMessage()));
-                $this->pushCallLog($method, $uri, $api_interface, false, $message, $this->accessToken);
+                $this->pushCallLog(
+                    $method,
+                    $uri,
+                    $api_interface,
+                    false,
+                    $message,
+                    $this->accessToken,
+                    $durationMs
+                );
 
                 throw new GoogleApiException(
                     $bodyContents !== '' ? $bodyContents : $e->getMessage(),
@@ -249,6 +284,11 @@ class GoogleClient
         });
     }
 
+    protected function elapsedMs(float $startedAt): int
+    {
+        return (int) max(0, round((microtime(true) - $startedAt) * 1000));
+    }
+
     protected function pushCallLog(
         string $method,
         string $uri,
@@ -256,6 +296,7 @@ class GoogleClient
         bool $success,
         string $error = '',
         string $token = '',
+        int $durationMs = 0,
     ): void {
         if (! is_callable(self::$callLogHandler)) {
             return;
@@ -269,7 +310,13 @@ class GoogleClient
 
         if ($error || ! $success) {
             $this->safeLog(
-                ['message' => $error, 'url' => $uri, 'success' => $success, 'token' => $token],
+                [
+                    'message' => $error,
+                    'url' => $uri,
+                    'success' => $success,
+                    'token' => $token,
+                    'duration_ms' => $durationMs,
+                ],
                 '接口日志',
                 'call_logs'
             );
@@ -280,6 +327,7 @@ class GoogleClient
             'api_interface' => $apiInterface,
             'is_success' => $success ? 1 : 0,
             'error' => $error,
+            'duration_ms' => $durationMs,
             'call_hour' => date('Y-m-d H:00:00'),
             'created_at' => date('Y-m-d H:i:s'),
         ]);

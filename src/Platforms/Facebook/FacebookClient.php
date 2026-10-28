@@ -147,6 +147,59 @@ class FacebookClient
         return $this->request('POST', $uri, $query, $body, $api_interface, $asForm);
     }
 
+    /**
+     * application/x-www-form-urlencoded POST（OAuth / 视频 file_url 等）。
+     */
+    public function postForm(string $uri, array $body = [], array $query = [], string $api_interface = ''): array
+    {
+        return $this->request('POST', $uri, $query, $body, $api_interface, true);
+    }
+
+    /**
+     * multipart/form-data 上传（广告图片 / 视频本地文件）。
+     *
+     * @param array<string, mixed> $fields 普通表单字段
+     * @param list<array{name: string, contents: string|resource, filename?: string, mime?: string}> $files
+     */
+    public function postMultipart(
+        string $uri,
+        array $fields = [],
+        array $files = [],
+        array $query = [],
+        string $api_interface = '',
+    ): array {
+        return $this->withTokenFailover(function () use ($uri, $fields, $files, $query, $api_interface): array {
+            $attempt = 0;
+
+            while (true) {
+                $this->paceBeforeRequest();
+
+                try {
+                    return $this->sendMultipart($uri, $fields, $files, $query, $api_interface);
+                } catch (FacebookApiException $e) {
+                    if (! $this->isRateLimitError($e) || $attempt >= $this->maxRetries) {
+                        throw $e;
+                    }
+
+                    ++$attempt;
+                    $delayMs = $this->resolveBackoffDelayMs($attempt, $e);
+                    $this->safeLog(
+                        [
+                            'attempt' => $attempt,
+                            'delay_ms' => $delayMs,
+                            'uri' => $uri,
+                            'message' => $e->getMessage(),
+                            'token' => $this->accessToken,
+                        ],
+                        'rate-limit-retry',
+                        'limit'
+                    );
+                    $this->sleepMs($delayMs);
+                }
+            }
+        });
+    }
+
     public function delete(string $uri, array $query = [], string $api_interface = ''): array
     {
         return $this->request('DELETE', $uri, $query, [], $api_interface);
@@ -312,32 +365,95 @@ class FacebookClient
         string $api_interface = '',
         bool $asForm = false
     ): array {
-        try {
-            $options = [
-                'query' => $query,
+        $options = [
+            'query' => $query,
+        ];
+        // OAuth 换 token 等场景可不传 user access_token
+        if ($this->accessToken !== '') {
+            $options['query']['access_token'] = $this->accessToken;
+        }
+
+        if ($this->defaultHeaders !== []) {
+            $options['headers'] = $this->defaultHeaders;
+        }
+
+        if ($body !== []) {
+            if ($asForm) {
+                $options['form_params'] = $body;
+                // 避免业务侧 defaultHeaders 里的 application/json 干扰 form 提交
+                unset($options['headers']['Content-Type'], $options['headers']['content-type']);
+            } else {
+                $options['json'] = $body;
+            }
+        }
+
+        return $this->dispatchHttp($method, $uri, $options, $api_interface);
+    }
+
+    /**
+     * @param array<string, mixed> $fields
+     * @param list<array{name: string, contents: string|resource, filename?: string, mime?: string}> $files
+     */
+    protected function sendMultipart(
+        string $uri,
+        array $fields,
+        array $files,
+        array $query,
+        string $api_interface,
+    ): array {
+        $multipart = [];
+        foreach ($fields as $name => $value) {
+            if ($value === null) {
+                continue;
+            }
+            $multipart[] = [
+                'name' => (string) $name,
+                'contents' => is_scalar($value) || $value instanceof \Stringable
+                    ? (string) $value
+                    : (string) json_encode($value, JSON_UNESCAPED_UNICODE),
             ];
-            // OAuth 换 token 等场景可不传 user access_token
-            if ($this->accessToken !== '') {
-                $options['query']['access_token'] = $this->accessToken;
+        }
+        foreach ($files as $file) {
+            $part = [
+                'name' => (string) ($file['name'] ?? 'file'),
+                'contents' => $file['contents'] ?? '',
+            ];
+            if (! empty($file['filename'])) {
+                $part['filename'] = (string) $file['filename'];
             }
-
-            if ($this->defaultHeaders !== []) {
-                $options['headers'] = $this->defaultHeaders;
+            if (! empty($file['mime'])) {
+                $part['headers'] = ['Content-Type' => (string) $file['mime']];
             }
+            $multipart[] = $part;
+        }
 
-            if ($body !== []) {
-                if ($asForm) {
-                    $options['form_params'] = $body;
-                    // 避免业务侧 defaultHeaders 里的 application/json 干扰 form 提交
-                    unset($options['headers']['Content-Type'], $options['headers']['content-type']);
-                } else {
-                    $options['json'] = $body;
-                }
-            }
+        $options = [
+            'query' => $query,
+            'multipart' => $multipart,
+            'headers' => array_merge($this->defaultHeaders, [
+                // 大文件上传避免 100-continue 卡住
+                'Expect' => '',
+            ]),
+        ];
+        if ($this->accessToken !== '') {
+            $options['query']['access_token'] = $this->accessToken;
+        }
+        unset($options['headers']['Content-Type'], $options['headers']['content-type']);
 
+        return $this->dispatchHttp('POST', $uri, $options, $api_interface);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    protected function dispatchHttp(string $method, string $uri, array $options, string $api_interface): array
+    {
+        try {
             $uri = $this->normalizeUri($uri);
 
+            $startedAt = microtime(true);
             $response = $this->http->request($method, $uri, $options);
+            $durationMs = $this->elapsedMs($startedAt);
             $this->lastRequestAt = microtime(true);
             $this->captureAppUsage($response, $this->accessToken);
             $data = json_decode((string) $response->getBody(), true) ?: [];
@@ -349,17 +465,19 @@ class FacebookClient
                     $api_interface,
                     false,
                     (string) ($data['error']['message'] ?? ''),
-                    $this->accessToken
+                    $this->accessToken,
+                    $durationMs
                 );
                 $this->handleError($data['error'], $data);
             }
 
-            $this->pushCallLog($method, $uri, $api_interface, true, '', $this->accessToken);
+            $this->pushCallLog($method, $uri, $api_interface, true, '', $this->accessToken, $durationMs);
 
             return $data;
         } catch (FacebookApiException $e) {
             throw $e;
         } catch (RequestException $e) {
+            $durationMs = isset($startedAt) ? $this->elapsedMs($startedAt) : 0;
             $response = $e->getResponse();
             if ($response) {
                 $this->lastRequestAt = microtime(true);
@@ -386,7 +504,8 @@ class FacebookClient
                 $api_interface,
                 false,
                 (string) ($nowBody['error']['message'] ?? $e->getMessage()),
-                $this->accessToken
+                $this->accessToken,
+                $durationMs
             );
 
             throw new FacebookApiException(
@@ -505,6 +624,11 @@ class FacebookClient
         }
     }
 
+    protected function elapsedMs(float $startedAt): int
+    {
+        return (int) max(0, round((microtime(true) - $startedAt) * 1000));
+    }
+
     protected function pushCallLog(
         string $method,
         string $uri,
@@ -512,6 +636,7 @@ class FacebookClient
         bool $success,
         string $error = '',
         string $token = '',
+        int $durationMs = 0,
     ): void {
         if (! is_callable(self::$callLogHandler)) {
             return;
@@ -522,7 +647,13 @@ class FacebookClient
 
         if ($error || ! $success) {
             $this->safeLog(
-                ['message' => $error, 'url' => $uri, 'success' => $success, 'token' => $token],
+                [
+                    'message' => $error,
+                    'url' => $uri,
+                    'success' => $success,
+                    'token' => $token,
+                    'duration_ms' => $durationMs,
+                ],
                 '接口日志',
                 'call_logs'
             );
@@ -533,6 +664,7 @@ class FacebookClient
             'api_interface' => $interface,
             'is_success' => $success ? 1 : 0,
             'error' => $error,
+            'duration_ms' => $durationMs,
             'call_hour' => date('Y-m-d H:00:00'),
             'created_at' => date('Y-m-d H:i:s'),
         ]);

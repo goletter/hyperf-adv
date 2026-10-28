@@ -40,6 +40,7 @@ class FacebookPlatform
             account: new FacebookAccount($client),
             business: new FacebookBusiness($client),
             campaign: new FacebookCampaign($client),
+            ad: new FacebookAd($client),
             report: new FacebookReport($client),
             platform: AdvFactory::FACEBOOK,
             catalog: new FacebookCatalog($client),

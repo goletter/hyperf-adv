@@ -175,6 +175,82 @@ class FacebookBusiness
     }
 
     /**
+     * 主页已分配用户
+     * GET /{page_id}/assigned_users?business={business_id}
+     *
+     * @param list<string> $fields
+     */
+    public function listPageAssignedUsers(
+        string $pageId,
+        string $businessId,
+        array $fields = ['id', 'name', 'tasks', 'business'],
+        int $limit = 100
+    ): array {
+        return $this->client->getAll("/{$pageId}/assigned_users", [
+            'business' => $businessId,
+            'fields' => implode(',', $fields),
+            'limit' => $limit,
+        ], 'GET:/{page_id}/assigned_users');
+    }
+
+    /**
+     * 流式遍历主页已分配用户
+     *
+     * @param list<string> $fields
+     */
+    public function iteratePageAssignedUsers(
+        string $pageId,
+        string $businessId,
+        array $fields = ['id', 'name', 'tasks', 'business'],
+        int $limit = 100
+    ): \Generator {
+        yield from $this->client->paginate("/{$pageId}/assigned_users", [
+            'business' => $businessId,
+            'fields' => implode(',', $fields),
+            'limit' => $limit,
+        ], 'GET:/{page_id}/assigned_users');
+    }
+
+    /**
+     * 给系统用户 / Business User 分配主页权限
+     * POST /{page_id}/assigned_users
+     *
+     * @param list<string> $tasks 如 ADVERTISE、MANAGE、CREATE_CONTENT、MODERATE、ANALYZE
+     */
+    public function assignPageUser(
+        string $pageId,
+        string $userId,
+        string $businessId,
+        array $tasks = ['ADVERTISE']
+    ): array {
+        $tasks = array_values(array_filter(array_map('strval', $tasks)));
+        if ($tasks === []) {
+            throw new \InvalidArgumentException('tasks 不能为空');
+        }
+
+        return $this->client->post("/{$pageId}/assigned_users", [
+            'user' => $userId,
+            'business' => $businessId,
+            'tasks' => $tasks,
+        ], [], 'POST:/{page_id}/assigned_users');
+    }
+
+    /**
+     * 移除主页已分配用户
+     * DELETE /{page_id}/assigned_users
+     */
+    public function removePageAssignedUser(
+        string $pageId,
+        string $userId,
+        string $businessId
+    ): array {
+        return $this->client->delete("/{$pageId}/assigned_users", [
+            'user' => $userId,
+            'business' => $businessId,
+        ], 'DELETE:/{page_id}/assigned_users');
+    }
+
+    /**
      * 从 Business Manager 移除广告账户
      * 注意：此操作会从 Business Manager 中移除广告账户的访问权限，并不会真正删除账户
      * 
