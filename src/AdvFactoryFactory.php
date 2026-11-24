@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Goletter\Adv;
 
 use Hyperf\Contract\ConfigInterface;
+use Hyperf\Guzzle\ClientFactory;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -19,7 +20,11 @@ class AdvFactoryFactory
             $config = (array) $container->get(ConfigInterface::class)->get('adv', []);
         }
 
-        $factory = new AdvFactory($config);
+        $clientFactory = $container->has(ClientFactory::class)
+            ? $container->get(ClientFactory::class)
+            : null;
+
+        $factory = new AdvFactory($config, $clientFactory);
         AdvFactory::setShared($factory);
 
         return $factory;

@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Goletter\Adv\Platforms\Facebook;
 
-use GuzzleHttp\Client;
+use Goletter\Adv\AdvFactory;
 use Goletter\Adv\Platforms\Facebook\Exceptions\FacebookApiException;
 use Goletter\Adv\Platforms\Facebook\Exceptions\FacebookTokenExpiredException;
 use Goletter\Adv\Support\RotatesAccessTokens;
 use Goletter\Adv\Support\SafeLogs;
+use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 use Psr\Http\Message\ResponseInterface;
 use Throwable;
@@ -73,16 +74,31 @@ class FacebookClient
      */
     public function __construct(
         string|array $accessToken,
-        string $apiVersion = 'v24.0'
+        string $apiVersion = 'v24.0',
+        ?Client $http = null,
     ) {
         $this->bootstrapAccessTokens($accessToken);
         $this->apiVersion = $apiVersion;
         $this->baseUri = "https://graph.facebook.com/{$apiVersion}";
 
-        $this->http = new Client([
+        $this->http = $http ?? AdvFactory::httpClient([
             'base_uri' => $this->baseUri,
             'timeout' => 60,
         ]);
+    }
+
+    /**
+     * 下载远程文件（绝对 URL，不走 Graph base_uri 语义外的相对路径）.
+     */
+    public function download(string $url, float $timeout = 30.0): string
+    {
+        $response = $this->http->get($url, ['timeout' => $timeout]);
+        $bytes = (string) $response->getBody();
+        if ($bytes === '') {
+            throw new FacebookApiException('无法下载远程文件: ' . $url);
+        }
+
+        return $bytes;
     }
 
     public function setDefaultHeaders(array $headers): self

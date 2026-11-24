@@ -31,12 +31,19 @@ class GooglePlatform
             ?? self::env('GOOGLE_ADS_LOGIN_CUSTOMER_ID', '')
         );
 
+        $apiVersion = (string) ($options['api_version'] ?? 'v19');
+        $baseUri = (string) ($options['base_uri'] ?? 'https://googleads.googleapis.com');
+        $http = AdvFactory::httpClient([
+            'base_uri' => rtrim($baseUri, '/') . '/',
+            'timeout' => 120,
+        ]);
         $client = new GoogleClient(
             accessToken: $accessToken,
             developerToken: $developerToken,
             loginCustomerId: $loginCustomerId,
-            apiVersion: (string) ($options['api_version'] ?? 'v19'),
-            baseUri: (string) ($options['base_uri'] ?? 'https://googleads.googleapis.com')
+            apiVersion: $apiVersion,
+            baseUri: $baseUri,
+            http: $http,
         );
 
         if (! empty($options['default_headers']) && is_array($options['default_headers'])) {
@@ -60,7 +67,7 @@ class GooglePlatform
     {
         unset($options);
 
-        return new GoogleAuth();
+        return new GoogleAuth(AdvFactory::httpClient(['timeout' => 60]));
     }
 
     private static function env(string $key, string $default = ''): string

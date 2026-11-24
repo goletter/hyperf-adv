@@ -10,6 +10,8 @@ use Goletter\Adv\Platforms\Google\GoogleAuth;
 use Goletter\Adv\Platforms\Google\GoogleBundle;
 use Goletter\Adv\Platforms\TikTok\TikTokAuth;
 use Goletter\Adv\Platforms\TikTok\TikTokBundle;
+use GuzzleHttp\Client;
+use Hyperf\Guzzle\ClientFactory;
 use InvalidArgumentException;
 
 /**
@@ -68,17 +70,42 @@ class AdvFactory
     /** @var array<int|string, string> */
     protected array $aliases;
 
+    protected ?ClientFactory $clientFactory;
+
     /**
      * @param array<string, mixed> $config publish/adv.php 结构
      */
-    public function __construct(array $config = [])
+    public function __construct(array $config = [], ?ClientFactory $clientFactory = null)
     {
         self::bootDefaults();
         $this->config = $config;
+        $this->clientFactory = $clientFactory;
         $this->aliases = self::$defaultAliases;
         foreach ($config['platforms'] ?? [] as $key => $name) {
             $this->aliases[$key] = (string) $name;
         }
+    }
+
+    /**
+     * 创建协程安全的 Guzzle 客户端（有 ClientFactory 时走 Hyperf Handler）。
+     *
+     * @param array<string, mixed> $options
+     */
+    public function createHttpClient(array $options = []): Client
+    {
+        if ($this->clientFactory !== null) {
+            return $this->clientFactory->create($options);
+        }
+
+        return new Client($options);
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    public static function httpClient(array $options = []): Client
+    {
+        return self::getShared()->createHttpClient($options);
     }
 
     /**

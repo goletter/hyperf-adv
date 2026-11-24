@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Goletter\Adv\Platforms\Google;
 
+use Goletter\Adv\AdvFactory;
 use Goletter\Adv\Platforms\Google\Exceptions\GoogleApiException;
 use Goletter\Adv\Platforms\Google\Exceptions\GoogleTokenExpiredException;
 use GuzzleHttp\Client;
@@ -27,9 +28,9 @@ class GoogleAuth
 
     protected Client $http;
 
-    public function __construct()
+    public function __construct(?Client $http = null)
     {
-        $this->http = new Client([
+        $this->http = $http ?? AdvFactory::httpClient([
             'timeout' => 60,
         ]);
     }

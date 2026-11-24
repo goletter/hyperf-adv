@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Goletter\Adv\Platforms\Facebook;
 
+use Goletter\Adv\AdvFactory;
 use Goletter\Adv\Platforms\Facebook\Exceptions\FacebookApiException;
 use Goletter\Adv\Platforms\Facebook\Exceptions\FacebookTokenExpiredException;
 use GuzzleHttp\Client;
@@ -33,10 +34,10 @@ class FacebookAuth
 
     protected string $graphBaseUri = 'https://graph.facebook.com';
 
-    public function __construct(string $apiVersion = 'v24.0')
+    public function __construct(string $apiVersion = 'v24.0', ?Client $http = null)
     {
         $this->apiVersion = $apiVersion;
-        $this->http = new Client([
+        $this->http = $http ?? AdvFactory::httpClient([
             'timeout' => 60,
         ]);
     }

@@ -4,11 +4,12 @@ declare(strict_types=1);
 
 namespace Goletter\Adv\Platforms\Google;
 
-use GuzzleHttp\Client;
+use Goletter\Adv\AdvFactory;
 use Goletter\Adv\Platforms\Google\Exceptions\GoogleApiException;
 use Goletter\Adv\Platforms\Google\Exceptions\GoogleTokenExpiredException;
 use Goletter\Adv\Support\RotatesAccessTokens;
 use Goletter\Adv\Support\SafeLogs;
+use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
 
 /**
@@ -46,13 +47,14 @@ class GoogleClient
         string $developerToken,
         string $loginCustomerId = '',
         string $apiVersion = 'v19',
-        string $baseUri = 'https://googleads.googleapis.com'
+        string $baseUri = 'https://googleads.googleapis.com',
+        ?Client $http = null,
     ) {
         $this->bootstrapAccessTokens($accessToken);
         $this->developerToken = $developerToken;
         $this->loginCustomerId = $loginCustomerId;
         $this->apiVersion = $apiVersion;
-        $this->http = new Client([
+        $this->http = $http ?? AdvFactory::httpClient([
             'base_uri' => rtrim($baseUri, '/') . '/',
             'timeout' => 120,
         ]);

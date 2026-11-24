@@ -572,15 +572,10 @@ class FacebookAd
     private function readImage(string $filePath): array
     {
         if (preg_match('#^https?://#i', $filePath)) {
-            $context = stream_context_create([
-                'http' => [
-                    'timeout' => 30,
-                    'follow_location' => 1,
-                ],
-            ]);
-            $bytes = @file_get_contents($filePath, false, $context);
-            if ($bytes === false || $bytes === '') {
-                throw new InvalidArgumentException('无法下载广告图片: ' . $filePath);
+            try {
+                $bytes = $this->client->download($filePath);
+            } catch (\Throwable $e) {
+                throw new InvalidArgumentException('无法下载广告图片: ' . $filePath, 0, $e);
             }
 
             return [$bytes, $this->basenameFromPath($filePath, 'ad.jpg')];

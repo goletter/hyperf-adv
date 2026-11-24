@@ -22,10 +22,12 @@ class TikTokPlatform
      */
     public static function create(string|array $accessToken, array $options): TikTokBundle
     {
-        $client = new TikTokClient(
-            $accessToken,
-            (string) ($options['base_uri'] ?? 'https://business-api.tiktok.com')
-        );
+        $baseUri = (string) ($options['base_uri'] ?? 'https://business-api.tiktok.com');
+        $http = AdvFactory::httpClient([
+            'base_uri' => rtrim($baseUri, '/'),
+            'timeout' => 60,
+        ]);
+        $client = new TikTokClient($accessToken, $baseUri, $http);
 
         if (! empty($options['default_headers']) && is_array($options['default_headers'])) {
             $client->setDefaultHeaders($options['default_headers']);
@@ -50,7 +52,8 @@ class TikTokPlatform
 
         return new TikTokAuth(
             $baseUri,
-            (string) ($options['auth_base_uri'] ?? $baseUri)
+            (string) ($options['auth_base_uri'] ?? $baseUri),
+            AdvFactory::httpClient(['timeout' => 60]),
         );
     }
 }

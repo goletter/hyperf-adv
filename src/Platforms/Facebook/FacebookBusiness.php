@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Goletter\Adv\Platforms\Facebook;
 
+use Goletter\Adv\AdvFactory;
+
 class FacebookBusiness
 {
     protected ?FacebookAccount $account = null;
@@ -587,6 +589,9 @@ class FacebookBusiness
 
     protected function auth(): FacebookAuth
     {
-        return new FacebookAuth($this->client->getApiVersion());
+        return new FacebookAuth(
+            $this->client->getApiVersion(),
+            AdvFactory::httpClient(['timeout' => 60]),
+        );
     }
 }

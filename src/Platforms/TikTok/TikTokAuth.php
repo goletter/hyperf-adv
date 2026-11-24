@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Goletter\Adv\Platforms\TikTok;
 
+use Goletter\Adv\AdvFactory;
 use Goletter\Adv\Platforms\TikTok\Exceptions\TikTokApiException;
 use Goletter\Adv\Platforms\TikTok\Exceptions\TikTokTokenExpiredException;
 use GuzzleHttp\Client;
@@ -29,11 +30,12 @@ class TikTokAuth
 
     public function __construct(
         string $baseUri = 'https://business-api.tiktok.com',
-        string $authBaseUri = 'https://business-api.tiktok.com'
+        string $authBaseUri = 'https://business-api.tiktok.com',
+        ?Client $http = null,
     ) {
         $this->baseUri = rtrim($baseUri, '/');
         $this->authBaseUri = rtrim($authBaseUri, '/');
-        $this->http = new Client([
+        $this->http = $http ?? AdvFactory::httpClient([
             'timeout' => 60,
         ]);
     }
